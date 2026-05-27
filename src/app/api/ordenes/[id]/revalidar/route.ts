@@ -30,7 +30,7 @@ export async function POST(
 
     for (const detalle of detalles) {
       if (!detalle.id_cliente_raw) continue
-      const match = await resolverSKU(detalle.id_cliente_raw, clienteId)
+      const match = await resolverSKU(detalle.id_cliente_raw, detalle.notas_linea, clienteId)
       if (match.estado === 'resuelto') {
         await supabase.from('oya_detalles_orden').update({
           sku_interno: match.sku_interno,
