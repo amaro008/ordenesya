@@ -49,7 +49,7 @@ export function stripAfijos(sku: string): string[] {
     }
   }
 
-  return [...new Set(candidatos)].filter(Boolean)
+  return Array.from(new Set(candidatos)).filter(Boolean)
 }
 
 // Compatibilidad con llamadas anteriores
