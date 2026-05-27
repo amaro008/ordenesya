@@ -18,7 +18,7 @@ export default async function PaginaClientes() {
           <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>Clientes</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{clientes?.length || 0} clientes registrados</p>
         </div>
-        <Link href="/clientes/nueva" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', background: 'var(--accent)', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: '600', textDecoration: 'none' }}>
+        <Link href="/clientes/nuevo" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', background: 'var(--accent)', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: '600', textDecoration: 'none' }}>
           <Plus size={16} /> Nuevo cliente
         </Link>
       </div>
@@ -26,7 +26,7 @@ export default async function PaginaClientes() {
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '64px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
           <p style={{ fontSize: '15px', fontWeight: '500', marginBottom: '4px' }}>Sin clientes aún</p>
-          <Link href="/clientes/nueva" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none' }}>Crear primer cliente →</Link>
+          <Link href="/clientes/nuevo" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none' }}>Crear primer cliente →</Link>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
