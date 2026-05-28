@@ -12,7 +12,7 @@ interface SidebarProps {
 const NAV = [
   { href: '/dashboard',       label: 'Dashboard',    icon: LayoutDashboard },
   { href: '/ordenes/nueva',   label: 'Nueva Orden',  icon: FileText, highlight: true },
-  { href: '/clientes',        label: 'Clientes',     icon: Users },
+  { href: '/clientes',        label: 'Cadenas',     icon: Users },
   { href: '/skus',            label: 'Catálogo SKUs',icon: Package },
 ]
 

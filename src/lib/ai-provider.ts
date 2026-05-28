@@ -3,13 +3,15 @@ import type { GeminiOrdenResponse } from '@/types'
 const SYSTEM_PROMPT = `Eres un sistema experto en interpretar órdenes de compra (OC) de proveedores de alimentos en México.
 Devuelve ÚNICAMENTE un JSON válido sin markdown ni explicaciones.
 
-Estructura exacta:
+ESTRUCTURA EXACTA:
 {
-  "cliente_detectado": {
-    "nombre": "nombre del comedor/unidad/negocio que EMITE la OC (el comprador)",
-    "identificadores": ["lista de IDs únicos del cliente: RFC, centro de costos, nombre de unidad, ID proveedor"]
+  "cadena_detectada": {
+    "nombre": "nombre de la empresa/cadena que EMITE la OC (el emisor del documento: Arte Di Piatto, Aramark, Favorite Vegan Food, etc.)",
+    "rfc": "RFC del emisor si aparece en el documento",
+    "identificadores": ["otros identificadores del emisor: nombre del sistema, plataforma, etc."]
   },
-  "numero_oc": "número de OC (MPO XXXX, FOLIO NKSXXXX, etc.) o null",
+  "comedor": "nombre del comedor o ubicación específica — campo COMEDOR del documento (Borgwarner, Navistar, Vertiv Apodaca, NEMAK SALTILLO, etc.)",
+  "numero_oc": "número de OC (MPO XXXX, MPE XXXX, FOLIO NKSXXXX, etc.) o null",
   "fecha_oc": "YYYY-MM-DD o null",
   "subtotal": 0.0,
   "iva": 0.0,
@@ -17,7 +19,7 @@ Estructura exacta:
   "lineas": [
     {
       "linea_num": 1,
-      "id_producto_cliente": "código EXACTO del producto tal como aparece en el documento",
+      "id_producto_cliente": "código EXACTO del producto tal como aparece",
       "descripcion_cliente": "descripción del producto",
       "cantidad": 0.0,
       "precio_unitario": 0.0,
@@ -28,25 +30,33 @@ Estructura exacta:
   "notas": null
 }
 
-== CLIENTE CORRECTO ==
-- El PROVEEDOR en el documento es quien vende (SIGMA FOODSERVICE, etc.) — NO es el cliente
-- El cliente es quien EMITE/COMPRA: campo COMEDOR, "Nombre de Unidad", membrete del documento
-- Identificadores: centro de costos, RFC del cliente, ID de ubicación — NO el folio de OC
+== REGLA CRÍTICA: DOS NIVELES DE EMPRESA ==
+Estos documentos tienen DOS entidades distintas que NO debes confundir:
 
-== LÍNEAS DE PRODUCTO — MUY IMPORTANTE ==
-- La columna de código de producto se llama: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "Código", "SKU", "Material", "Referencia"
-- Extrae el código TAL COMO APARECE: SIG8912, 8666SIG, 8964RY, SIG7708B, 66, 70060146
-- NO confundas el ID cliente SAP, número de proveedor, ni centro de costos con códigos de producto
-- Los códigos de producto están en la tabla de líneas del pedido, junto a descripción y cantidad
-- Si el código tiene letras como SIG, FSV, RY al inicio o final: inclúyelas tal cual, el sistema las procesará
+NIVEL 1 — CADENA/EMISOR (quien emite la OC, el comprador):
+- Es la empresa del membrete del documento: Arte Di Piatto, Favorite Vegan Food, Aramark, etc.
+- Tiene su propio RFC: ADP021022MM0, FVF1607088M2, AME950116SJ1, etc.
+- Va en "cadena_detectada"
+
+NIVEL 2 — COMEDOR/UBICACIÓN (la ubicación específica que recibe el pedido):
+- Es el campo "COMEDOR" del documento: Borgwarner, Navistar, Vertiv Apodaca, NEMAK SALTILLO, Lab Griffith
+- Es UNA ubicación específica de la cadena
+- Va en el campo "comedor"
+
+NIVEL 3 — PROVEEDOR (quien RECIBE la OC, el vendedor):
+- Es SIGMA FOODSERVICE COMERCIAL — NO lo incluyas como cadena ni comedor
+- El campo "PROVEEDOR" del documento es el vendedor, NO el cliente
+
+== LÍNEAS DE PRODUCTO ==
+- Columnas: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "SKU", "Código"
+- Extrae el código TAL COMO APARECE: SIG8912, 8666SIG, 8964RY, 66, 70060146, 942SIG, 307
+- NO confundas centros de costos ni IDs de sistema con códigos de producto
 - Tabla semanal Aramark: suma cantidades de todos los días
 
 == TOTALES ==
-- Extrae subtotal, IVA y total del documento si aparecen
-- Usa punto decimal, no coma: 1625.00 no 1,625.00
-- Si no aparece un valor usa 0
-
-Extrae TODAS las líneas de productos sin omitir ninguna.`
+- Extrae subtotal, IVA y total si aparecen
+- Punto decimal, no coma: 1625.00 no 1,625.00
+- Si no aparece usa 0`
 
 function parseJson(text: string): GeminiOrdenResponse {
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -72,9 +82,10 @@ async function interpretarConClaude(base64: string, mimeType: string): Promise<G
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
   const isPdf = mimeType === 'application/pdf'
-  type CB = { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
-           | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'|'image/png'|'image/webp'|'image/gif'; data: string } }
-           | { type: 'text'; text: string }
+  type CB =
+    | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string } }
+    | { type: 'text'; text: string }
   const mediaBlock: CB = isPdf
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
     : { type: 'image', source: { type: 'base64', media_type: mimeType as any, data: base64 } }
@@ -116,7 +127,6 @@ export async function interpretarOrdenConGemini(base64: string, mimeType: string
 export const MIME_TYPES_SOPORTADOS: Record<string, string> = {
   'application/pdf': 'application/pdf',
   'image/jpeg': 'image/jpeg',
-  'image/jpg': 'image/jpeg',
   'image/png': 'image/png',
   'image/webp': 'image/webp',
 }

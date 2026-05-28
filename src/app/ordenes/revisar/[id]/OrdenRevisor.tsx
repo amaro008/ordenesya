@@ -143,21 +143,34 @@ export default function OrdenRevisor({ id }: { id: string }) {
         ))}
       </div>
 
-      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: cliente ? 'rgba(14,165,233,0.12)' : 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <User size={17} color={cliente ? 'var(--accent)' : 'var(--warning)'} />
+      {/* Cadena + Comedor detectado */}
+      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: orden?.comedor_detectado ? '12px' : '0' }}>
+          <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: cliente ? 'rgba(14,165,233,0.12)' : 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <User size={17} color={cliente ? 'var(--accent)' : 'var(--warning)'} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Cadena</p>
+            <select value={cliente?.id || ''} onChange={e => asignarCliente(e.target.value)} style={{ padding: '4px 8px', fontSize: '14px', fontWeight: '500', maxWidth: '360px' }}>
+              <option value="">— Sin asignar —</option>
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+          {cliente && (
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
+              <div>Centro: <span style={{ color: 'var(--text-secondary)' }}>{cliente.centro || '—'}</span></div>
+              <div>Almacén: <span style={{ color: 'var(--text-secondary)' }}>{cliente.almacen || '—'}</span></div>
+            </div>
+          )}
         </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Cliente</p>
-          <select value={cliente?.id || ''} onChange={e => asignarCliente(e.target.value)} style={{ padding: '4px 8px', fontSize: '14px', fontWeight: '500', maxWidth: '360px' }}>
-            <option value="">— Sin asignar —</option>
-            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
-        </div>
-        {cliente && (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
-            <div>Centro: <span style={{ color: 'var(--text-secondary)' }}>{cliente.centro || '—'}</span></div>
-            <div>Almacén: <span style={{ color: 'var(--text-secondary)' }}>{cliente.almacen || '—'}</span></div>
+        {/* Comedor detectado — informativo */}
+        {(orden as any)?.comedor_detectado && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.15)', borderRadius: '6px', fontSize: '13px' }}>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(14,165,233,0.12)', padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+              COMEDOR
+            </span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>{(orden as any).comedor_detectado}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>detectado de la OC · informativo</span>
           </div>
         )}
       </div>

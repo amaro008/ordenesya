@@ -28,13 +28,13 @@ export default async function PaginaClientes({
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>Clientes</h1>
+          <h1 style={{ fontSize: "22px", fontWeight: "700", marginBottom: "4px" }}>Cadenas</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
             {clientes?.length || 0} clientes{q ? ` para "${q}"` : ' registrados'}
           </p>
         </div>
         <Link href="/clientes/nuevo" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', background: 'var(--accent)', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: '600', textDecoration: 'none' }}>
-          <Plus size={16} /> Nuevo cliente
+          <Plus size={16} /> Nueva cadena
         </Link>
       </div>
 
@@ -44,7 +44,7 @@ export default async function PaginaClientes({
         <input
           name="q"
           defaultValue={q}
-          placeholder="Buscar por nombre, razón social, ID SAP o cadena..."
+          placeholder="Buscar por nombre, razón social o RFC..."
           style={{ paddingLeft: '36px', maxWidth: '480px' }}
         />
       </form>
@@ -53,11 +53,11 @@ export default async function PaginaClientes({
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '64px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
           <p style={{ fontSize: '15px', fontWeight: '500', marginBottom: '4px' }}>
-            {q ? `Sin resultados para "${q}"` : 'Sin clientes aún'}
+            {q ? `Sin resultados para "${q}"` : 'Sin cadenas aún'}
           </p>
           {!q && (
             <Link href="/clientes/nuevo" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none' }}>
-              Crear primer cliente →
+              Crear primera cadena →
             </Link>
           )}
         </div>

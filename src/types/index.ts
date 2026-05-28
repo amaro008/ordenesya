@@ -2,7 +2,7 @@ export type EstadoOrden = 'borrador' | 'revisando' | 'confirmado' | 'exportado'
 export type EstadoLinea = 'resuelto' | 'conflicto' | 'pendiente'
 export type MetodoResolucion = 'exacto' | 'sufijo' | 'equivalencia' | 'manual'
 export type TipoArchivo = 'pdf' | 'imagen' | 'excel' | 'email'
-export type TipoIdentifier = 'nombre_negocio' | 'id_ubicacion' | 'centro_costos' | 'rfc' | 'otro'
+export type TipoIdentifier = 'nombre_cadena' | 'rfc_emisor' | 'nombre_negocio' | 'id_ubicacion' | 'centro_costos' | 'rfc' | 'otro'
 
 export interface Usuario {
   id: string
@@ -19,18 +19,15 @@ export interface SKU {
   sku: string
   descripcion: string
   familia: string | null
-  sublinea: string | null
-  linea_ventas: string | null
-  marca: string | null
   activo: boolean
 }
 
 export interface Cliente {
   id: string
-  nombre: string
+  nombre: string           // Nombre de la cadena: "Arte Di Piatto", "Aramark"
   razon_social: string | null
-  id_sap: string | null          // ID único en SAP — obligatorio
-  cadena: string | null          // Agrupador: ARAMARK, SODEXO, etc.
+  id_sap: string | null    // Opcional — no obligatorio
+  cadena: string | null    // Alias o nombre corto de la cadena
   centro: string | null
   almacen: string | null
   notas: string | null
@@ -65,6 +62,7 @@ export interface Orden {
   asesor_id: string
   numero_oc: string | null
   fecha_oc: string | null
+  comedor_detectado: string | null   // Campo COMEDOR extraído de la OC (informativo)
   archivo_nombre: string | null
   archivo_tipo: TipoArchivo | null
   archivo_url: string | null
@@ -72,7 +70,6 @@ export interface Orden {
   total_lineas: number
   lineas_resueltas: number
   lineas_conflicto: number
-  // Totales de la OC original
   subtotal_oc: number | null
   iva_oc: number | null
   total_oc: number | null
@@ -100,10 +97,12 @@ export interface DetalleOrden {
 }
 
 export interface GeminiOrdenResponse {
-  cliente_detectado: {
+  cadena_detectada: {
     nombre: string | null
+    rfc: string | null
     identificadores: string[]
   }
+  comedor: string | null             // Campo COMEDOR — ubicación específica
   numero_oc: string | null
   fecha_oc: string | null
   subtotal: number | null

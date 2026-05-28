@@ -31,16 +31,17 @@ export async function POST(request: NextRequest) {
 
     // Interpretar con IA
     const { resultado: gemini, proveedor } = await interpretarOrdenConIA(base64, mimeType)
-    console.log(`[Orden] Procesada con ${proveedor}`)
+    console.log(`[Orden] Procesada con ${proveedor}, cadena: ${gemini.cadena_detectada?.nombre}, comedor: ${gemini.comedor}`)
 
-    // Detectar cliente
+    // Detectar cadena usando identificadores del emisor
     const identificadores = [
-      gemini.cliente_detectado.nombre,
-      ...gemini.cliente_detectado.identificadores,
+      gemini.cadena_detectada?.nombre,
+      gemini.cadena_detectada?.rfc,
+      ...(gemini.cadena_detectada?.identificadores || []),
     ].filter(Boolean) as string[]
     const clienteId = await detectarCliente(identificadores)
 
-    // Crear orden con totales
+    // Crear orden con comedor detectado
     const { data: orden, error: ordenError } = await supabase
       .from('oya_ordenes')
       .insert({
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
         asesor_id: usuario.id,
         numero_oc: gemini.numero_oc,
         fecha_oc: gemini.fecha_oc,
+        comedor_detectado: gemini.comedor,
         archivo_nombre: archivo.name,
         archivo_tipo: mimeType.includes('pdf') ? 'pdf' : 'imagen',
         estado: 'revisando',
@@ -75,7 +77,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ordenId: orden.id,
-      clienteDetectado: clienteId !== null,
+      cadenaDetectada: clienteId !== null,
+      comedorDetectado: gemini.comedor,
       totalLineas: gemini.lineas.length,
       lineasResueltas,
       lineasConflicto,

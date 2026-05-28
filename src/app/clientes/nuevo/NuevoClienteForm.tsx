@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient as createBrowserClient } from '@/lib/supabase-browser'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Save, Upload, Loader2, CheckCircle, X } from 'lucide-react'
+import { ArrowLeft, Save, Upload, Loader2, CheckCircle, X, Info } from 'lucide-react'
 import Link from 'next/link'
 
 interface IdentificadorExtraido {
@@ -19,8 +19,7 @@ export default function NuevoClienteForm() {
   const [guardando, setGuardando] = useState(false)
   const [nombre, setNombre] = useState('')
   const [razonSocial, setRazonSocial] = useState('')
-  const [idSap, setIdSap] = useState('')
-  const [cadena, setCadena] = useState('')
+  const [rfcEmisor, setRfcEmisor] = useState('')
   const [centro, setCentro] = useState('')
   const [almacen, setAlmacen] = useState('')
   const [notas, setNotas] = useState('')
@@ -38,8 +37,9 @@ export default function NuevoClienteForm() {
       const res = await fetch('/api/clientes/extraer-identificadores', { method: 'POST', body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      if (!nombre && data.nombre_cliente) setNombre(data.nombre_cliente)
+      if (!nombre && data.nombre_cadena) setNombre(data.nombre_cadena)
       if (!razonSocial && data.razon_social) setRazonSocial(data.razon_social)
+      if (!rfcEmisor && data.rfc_emisor) setRfcEmisor(data.rfc_emisor)
       setIdentificadores((data.identificadores || []).map((id: any) => ({ ...id, seleccionado: true })))
       setOcProcesada(true)
       toast.success(`${data.identificadores?.length || 0} identificadores extraídos`)
@@ -52,68 +52,92 @@ export default function NuevoClienteForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!nombre.trim()) { toast.error('El nombre es obligatorio'); return }
-    if (!idSap.trim()) { toast.error('El ID SAP es obligatorio'); return }
-    if (!/^\d+$/.test(idSap.trim())) { toast.error('El ID SAP debe ser numérico'); return }
-
-    // Verificar unicidad del ID SAP
-    const { data: existente } = await supabase
-      .from('oya_clientes').select('id').eq('id_sap', idSap.trim()).single()
-    if (existente) { toast.error('Ya existe un cliente con ese ID SAP'); return }
-
+    if (!nombre.trim()) { toast.error('El nombre de la cadena es obligatorio'); return }
     setGuardando(true)
+
     const { data: cliente, error } = await supabase
       .from('oya_clientes')
-      .insert({ nombre: nombre.trim(), razon_social: razonSocial || null, id_sap: idSap.trim(), cadena: cadena || null, centro: centro || null, almacen: almacen || null, notas: notas || null })
+      .insert({
+        nombre: nombre.trim(),
+        razon_social: razonSocial || null,
+        cadena: rfcEmisor || null, // guardamos RFC como referencia rápida
+        centro: centro || null,
+        almacen: almacen || null,
+        notas: notas || null,
+      })
       .select().single()
 
-    if (error) { toast.error('Error creando cliente'); setGuardando(false); return }
+    if (error) { toast.error('Error creando la cadena'); setGuardando(false); return }
 
+    // Guardar RFC emisor como identificador de tipo rfc_emisor
+    const idsBase: any[] = []
+    if (rfcEmisor.trim()) {
+      idsBase.push({ cliente_id: cliente.id, tipo: 'rfc_emisor', valor: rfcEmisor.trim() })
+    }
+
+    // Identificadores extraídos seleccionados
     const idsSeleccionados = identificadores
       .filter(id => id.seleccionado && id.valor.trim())
       .map(id => ({ cliente_id: cliente.id, tipo: id.tipo, valor: id.valor.trim() }))
 
-    if (idsSeleccionados.length > 0) {
-      await supabase.from('oya_cliente_identifiers').insert(idsSeleccionados)
+    const todosIds = [...idsBase, ...idsSeleccionados]
+    if (todosIds.length > 0) {
+      await supabase.from('oya_cliente_identifiers').insert(todosIds)
     }
 
-    toast.success('Cliente creado')
+    toast.success('Cadena creada correctamente')
     router.push(`/clientes/detalle/${cliente.id}`)
   }
 
   const tipoLabel: Record<string, string> = {
-    nombre_negocio: 'Nombre negocio', centro_costos: 'Centro costos',
-    id_ubicacion: 'ID ubicación', rfc: 'RFC', otro: 'Otro',
+    nombre_cadena:  'Nombre cadena',
+    rfc_emisor:     'RFC emisor',
+    nombre_negocio: 'Nombre negocio',
+    centro_costos:  'Centro costos',
+    id_ubicacion:   'ID ubicación',
+    rfc:            'RFC',
+    otro:           'Otro',
   }
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: '560px' }}>
       <Link href="/clientes" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '13px', textDecoration: 'none', marginBottom: '20px' }}>
-        <ArrowLeft size={14} /> Volver a clientes
+        <ArrowLeft size={14} /> Volver a cadenas
       </Link>
-      <h1 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '24px' }}>Nuevo cliente</h1>
+      <h1 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '6px' }}>Nueva cadena</h1>
+      <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+        Una cadena es el emisor de las OCs: Arte Di Piatto, Aramark, Favorite Vegan Food, etc.
+        Los comedores (Borgwarner, Navistar) se detectan automáticamente de cada OC.
+      </p>
 
       <form onSubmit={handleSubmit}>
-        <Section title="Datos del cliente">
-          <div style={{ display: 'grid', gap: '14px' }}>
-            <Field label="Nombre comercial *" value={nombre} onChange={setNombre} placeholder="Ej: NEMAK SALTILLO" />
-            <Field label="Razón social" value={razonSocial} onChange={setRazonSocial} placeholder="Ej: ARAMARK MEXICO S DE RL DE CV" />
+        {/* OC de ejemplo — primero para pre-llenar */}
+        <Section title="OC de ejemplo" subtitle="Sube una OC para extraer automáticamente el nombre, RFC e identificadores de la cadena">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', border: `2px dashed ${ocProcesada ? 'var(--success)' : 'var(--border)'}`, borderRadius: '8px', cursor: procesandoOC ? 'not-allowed' : 'pointer', background: ocProcesada ? 'rgba(34,197,94,0.05)' : 'transparent', fontSize: '14px', color: ocProcesada ? 'var(--success)' : 'var(--text-secondary)', transition: 'all 0.15s' }}>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={handleOCUpload} disabled={procesandoOC} />
+            {procesandoOC ? <><Loader2 size={16} className="animate-spin" /> Analizando con IA...</>
+              : ocProcesada ? <><CheckCircle size={16} /> OC analizada — datos pre-llenados</>
+              : <><Upload size={16} /> Subir OC de ejemplo (PDF o imagen)</>}
+          </label>
+        </Section>
 
-            {/* ID SAP — campo clave */}
+        {/* Datos de la cadena */}
+        <Section title="Datos de la cadena">
+          <div style={{ display: 'grid', gap: '14px' }}>
+            <Field label="Nombre de la cadena *" value={nombre} onChange={setNombre} placeholder="Ej: Arte Di Piatto, Aramark, Favorite Vegan Food" />
+            <Field label="Razón social" value={razonSocial} onChange={setRazonSocial} placeholder="Ej: ARTE DI PIATTO SA DE CV" />
             <div>
-              <label style={labelStyle}>ID Cliente SAP <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <label style={labelStyle}>RFC del emisor</label>
               <input
-                value={idSap}
-                onChange={e => setIdSap(e.target.value.replace(/\D/g, ''))}
-                placeholder="Ej: 100012345 (solo números)"
-                style={{ borderColor: idSap && !/^\d+$/.test(idSap) ? 'var(--danger)' : undefined }}
+                value={rfcEmisor}
+                onChange={e => setRfcEmisor(e.target.value.toUpperCase())}
+                placeholder="Ej: ADP021022MM0"
+                style={{ fontFamily: 'monospace' }}
               />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Debe ser único y coincidir exactamente con el ID en SAP
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Info size={11} /> Es el identificador más confiable para detectar OCs de esta cadena
               </p>
             </div>
-
-            <Field label="Cadena" value={cadena} onChange={setCadena} placeholder="Ej: ARAMARK, SODEXO, ALSEA" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <Field label="Centro SAP" value={centro} onChange={setCentro} placeholder="Ej: 1000" />
               <Field label="Almacén SAP" value={almacen} onChange={setAlmacen} placeholder="Ej: 0001" />
@@ -122,17 +146,9 @@ export default function NuevoClienteForm() {
           </div>
         </Section>
 
-        <Section title="OC de ejemplo" subtitle="Sube una OC del cliente para extraer automáticamente sus identificadores de reconocimiento">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', border: `2px dashed ${ocProcesada ? 'var(--success)' : 'var(--border)'}`, borderRadius: '8px', cursor: procesandoOC ? 'not-allowed' : 'pointer', background: ocProcesada ? 'rgba(34,197,94,0.05)' : 'transparent', fontSize: '14px', color: ocProcesada ? 'var(--success)' : 'var(--text-secondary)', transition: 'all 0.15s' }}>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={handleOCUpload} disabled={procesandoOC} />
-            {procesandoOC ? <><Loader2 size={16} className="animate-spin" /> Analizando OC...</>
-              : ocProcesada ? <><CheckCircle size={16} /> OC procesada — identificadores extraídos</>
-              : <><Upload size={16} /> Subir OC de ejemplo (PDF o imagen)</>}
-          </label>
-        </Section>
-
+        {/* Identificadores adicionales */}
         {identificadores.length > 0 && (
-          <Section title="Identificadores de reconocimiento" subtitle="Se usan para detectar automáticamente las OCs de este cliente">
+          <Section title="Identificadores de reconocimiento" subtitle="Textos adicionales para detectar automáticamente las OCs de esta cadena">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
               {identificadores.map((id, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: id.seleccionado ? 'rgba(14,165,233,0.06)' : 'var(--bg-tertiary)', border: `1px solid ${id.seleccionado ? 'rgba(14,165,233,0.25)' : 'var(--border)'}`, borderRadius: '7px', opacity: id.seleccionado ? 1 : 0.5, transition: 'all 0.15s' }}>
@@ -157,7 +173,7 @@ export default function NuevoClienteForm() {
 
         <button type="submit" disabled={guardando} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', background: guardando ? 'var(--bg-tertiary)' : 'var(--accent)', color: guardando ? 'var(--text-muted)' : 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: guardando ? 'not-allowed' : 'pointer' }}>
           <Save size={15} />
-          {guardando ? 'Guardando...' : 'Crear cliente'}
+          {guardando ? 'Guardando...' : 'Crear cadena'}
         </button>
       </form>
     </div>
