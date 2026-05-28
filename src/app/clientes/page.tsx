@@ -65,9 +65,7 @@ export default async function PaginaClientes({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {clientes.map((cliente: any) => (
             <Link key={cliente.id} href={`/clientes/detalle/${cliente.id}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', textDecoration: 'none', color: 'inherit', transition: 'border-color 0.15s' }}
-              onMouseEnter={(e: any) => e.currentTarget.style.borderColor = 'var(--accent)'}
-              onMouseLeave={(e: any) => e.currentTarget.style.borderColor = 'var(--border)'}
+              style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', textDecoration: 'none', color: 'inherit' }}
             >
               <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: 'rgba(14,165,233,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Building2 size={17} color="var(--accent)" />
