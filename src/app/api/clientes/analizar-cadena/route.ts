@@ -18,7 +18,9 @@ ESTRUCTURA:
   "identificadores": ["ver regla abajo"],
   "comedores": ["lista de valores del campo COMEDOR en cada OC"],
   "formato_skus": "descripción del patrón de códigos de producto",
-  "ejemplo_skus": ["códigos tal como aparecen en la columna de claves"],
+  "skus_detectados": [
+    { "codigo": "código exacto de la OC", "descripcion": "descripción del producto como aparece en la OC" }
+  ],
   "ocs_procesadas": [{"numero_oc": "..."}]
 }
 
@@ -55,6 +57,11 @@ Extrae TODOS los valores que aparezcan en las 3 OCs y que identifiquen al compra
 
 IMPORTANTE: Los correos personales (berenice@..., fatima@...) NO son identificadores de cadena.
 SÍ es identificador el DOMINIO común de esos correos (platoexpress.com).
+
+Para "skus_detectados": extrae TODOS los productos únicos de las 3 OCs.
+- "codigo": el código EXACTO de la columna CLAVE ARTICULO/CLAVE ARTICULOD/Cód. (ej: SIG8912, 8666SIG, 66, 307)
+- "descripcion": descripción del producto TAL COMO APARECE en la OC (ej: "CREMA NORTEÑITA 1 LITRO", "JAMON COCIDO REBANADO")
+- Incluye mínimo 8 productos, máximo 20, sin repetidos
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EJEMPLO CORRECTO para OCs de Arte Di Piatto
@@ -133,11 +140,13 @@ export async function POST(request: NextRequest) {
     // Resolver equivalencias de SKUs contra el catálogo
     const { generarCandidatos } = await import('@/lib/sku-matcher')
 
-    const skusRaw: { id: string; desc: string | null }[] = (parsed.ejemplo_skus || [])
-      .map((sku: string) => ({ id: sku, desc: null }))
-
-    // También extraer de lineas si el JSON las trae
-    // (el prompt devuelve ejemplo_skus, no lineas completas)
+    // Usar skus_detectados (nuevo formato) o ejemplo_skus (fallback)
+    const skusRaw: { id: string; desc: string | null }[] = parsed.skus_detectados
+      ? (parsed.skus_detectados as any[]).map((s: any) => ({
+          id: typeof s === 'string' ? s : (s.codigo || s),
+          desc: typeof s === 'string' ? null : (s.descripcion || null),
+        }))
+      : (parsed.ejemplo_skus || []).map((sku: string) => ({ id: sku, desc: null }))
 
     const equivalencias = await Promise.all(
       skusRaw.map(async ({ id, desc }) => {
@@ -153,24 +162,33 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Sin match — buscar sugerencias por descripción si hay
-        let sugerencias: string[] = []
+        // Sin match — buscar sugerencias por descripción
+        let sugerencias: { sku: string; descripcion: string }[] = []
         if (desc) {
-          const palabras = desc.split(' ').filter(p => p.length > 3).slice(0, 3).join(' | ')
-          if (palabras) {
+          // Buscar por palabras clave relevantes (ignorar palabras cortas y unidades)
+          const STOP_WORDS = new Set(['DE', 'LA', 'EL', 'EN', 'CON', 'POR', 'FSV', 'KG', 'LT', 'PZA', 'GRS', 'ML'])
+          const palabrasClave = desc.toUpperCase()
+            .split(/[\s\/\-\(\)]+/)
+            .filter(p => p.length > 3 && !STOP_WORDS.has(p))
+            .slice(0, 3)
+
+          for (const palabra of palabrasClave) {
             const { data: similares } = await supabase
               .from('oya_skus').select('sku, descripcion')
-              .ilike('descripcion', `%${palabras.split(' | ')[0]}%`)
-              .eq('activo', true).limit(3)
-            sugerencias = (similares || []).map(s => s.sku)
+              .ilike('descripcion', `%${palabra}%`)
+              .eq('activo', true).limit(5)
+            if (similares && similares.length > 0) {
+              sugerencias = (similares as { sku: string; descripcion: string }[])
+              break
+            }
           }
         }
 
         return {
           id_cliente: id,
           descripcion_cliente: desc,
-          sku_interno: sugerencias[0] || null,
-          sugerencias,
+          sku_interno: null,  // no pre-seleccionar, dejar que el usuario elija
+          sugerencias: sugerencias.map(s => ({ sku: s.sku, descripcion: s.descripcion })),
           estado: sugerencias.length > 0 ? 'sugerido' : 'pendiente',
         }
       })
@@ -185,7 +203,7 @@ export async function POST(request: NextRequest) {
       identificadores: (parsed.identificadores || []).filter((id: any) => id.valor?.trim()),
       comedores:       parsed.comedores || [],
       formato_skus:    parsed.formato_skus || null,
-      ejemplo_skus:    parsed.ejemplo_skus || [],
+      ejemplo_skus:    skusRaw.map(s => s.id),
       equivalencias,
       ocs_procesadas:  parsed.ocs_procesadas || archivos.map(() => ({ numero_oc: null })),
     })

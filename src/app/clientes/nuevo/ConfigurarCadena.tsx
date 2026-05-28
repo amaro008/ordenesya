@@ -17,11 +17,16 @@ interface OcCargada {
   preview?: string // número de OC detectado
 }
 
+interface Sugerencia {
+  sku: string
+  descripcion: string
+}
+
 interface EquivalenciaDetectada {
-  id_cliente: string           // código tal como viene en la OC
+  id_cliente: string
   descripcion_cliente: string | null
-  sku_interno: string | null   // resuelto automáticamente
-  sugerencias: string[]        // hasta 3 SKUs sugeridos por similitud
+  sku_interno: string | null
+  sugerencias: Sugerencia[]
   estado: 'resuelto' | 'sugerido' | 'pendiente'
 }
 
@@ -456,47 +461,66 @@ export default function ConfigurarCadena() {
                            : 'rgba(239,68,68,0.2)'}`,
                     borderRadius: '7px',
                   }}>
-                    {/* ID del cliente */}
-                    <div>
-                      <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>{eq.id_cliente}</p>
+                    {/* ID + descripción del cliente */}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                        {eq.id_cliente}
+                      </p>
                       {eq.descripcion_cliente && (
-                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {eq.descripcion_cliente}
                         </p>
                       )}
                     </div>
 
                     {/* Flecha */}
-                    <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>→</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text-muted)', flexShrink: 0, padding: '0 4px' }}>→</span>
 
-                    {/* SKU interno */}
-                    <div>
-                      {eq.estado === 'resuelto' ? (
-                        <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--success)' }}>
-                          {eq.sku_interno}
-                        </p>
-                      ) : eq.estado === 'sugerido' ? (
-                        <select
-                          value={eq.sku_interno || ''}
-                          onChange={e => setEquivalencias(prev => prev.map((x, i) =>
-                            i === idx ? { ...x, sku_interno: e.target.value || null, estado: e.target.value ? 'resuelto' : 'pendiente' } : x
+                    {/* SKU interno con sugerencias */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {eq.estado === 'resuelto' && eq.sku_interno ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--success)' }}>
+                            ✓ {eq.sku_interno}
+                          </span>
+                          <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                            i === idx ? { ...x, sku_interno: null, estado: eq.sugerencias.length > 0 ? 'sugerido' : 'pendiente' } : x
+                          ))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '11px' }}>
+                            cambiar
+                          </button>
+                        </div>
+                      ) : eq.sugerencias.length > 0 ? (
+                        <div>
+                          <p style={{ fontSize: '10px', color: 'var(--warning)', marginBottom: '4px', fontWeight: '600' }}>
+                            Elige el SKU correcto:
+                          </p>
+                          {eq.sugerencias.map((s, si) => (
+                            <button key={si} onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                              i === idx ? { ...x, sku_interno: s.sku, estado: 'resuelto' } : x
+                            ))} style={{
+                              display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
+                              padding: '4px 8px', marginBottom: '3px',
+                              background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                              borderRadius: '5px', cursor: 'pointer', textAlign: 'left',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                            >
+                              <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--accent)', fontSize: '12px', flexShrink: 0 }}>{s.sku}</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.descripcion}</span>
+                            </button>
                           ))}
-                          style={{ fontSize: '12px', padding: '4px 6px', fontFamily: 'monospace' }}
-                        >
-                          <option value="">— Seleccionar —</option>
-                          {eq.sugerencias.map(s => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                          <option value="">Ninguno</option>
-                        </select>
+                          <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                            i === idx ? { ...x, sugerencias: [], estado: 'pendiente' } : x
+                          ))} style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}>
+                            Ninguna coincide
+                          </button>
+                        </div>
                       ) : (
-                        <input
-                          value={eq.sku_interno || ''}
-                          onChange={e => setEquivalencias(prev => prev.map((x, i) =>
-                            i === idx ? { ...x, sku_interno: e.target.value || null } : x
+                        <SkuBusquedaInline
+                          onSelect={sku => setEquivalencias(prev => prev.map((x, i) =>
+                            i === idx ? { ...x, sku_interno: sku, estado: 'resuelto' } : x
                           ))}
-                          placeholder="Buscar SKU..."
-                          style={{ fontSize: '12px', padding: '4px 8px', fontFamily: 'monospace', borderColor: 'rgba(239,68,68,0.4)' }}
                         />
                       )}
                     </div>
@@ -550,3 +574,49 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
 }
 
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }
+
+
+// Mini buscador de SKU inline para pendientes
+function SkuBusquedaInline({ onSelect }: { onSelect: (sku: string) => void }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<{ sku: string; descripcion: string }[]>([])
+
+  async function buscar(query: string) {
+    setQ(query)
+    if (query.length < 2) { setResults([]); return }
+    try {
+      const { createClient } = await import('@/lib/supabase-browser')
+      const sb = createClient()
+      const { data } = await sb.from('oya_skus')
+        .select('sku, descripcion')
+        .or(`sku.ilike.%${query}%,descripcion.ilike.%${query}%`)
+        .eq('activo', true).limit(6)
+      setResults((data || []) as { sku: string; descripcion: string }[])
+    } catch { setResults([]) }
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={q}
+        onChange={e => buscar(e.target.value)}
+        placeholder="Buscar por SKU o nombre..."
+        style={{ fontSize: '12px', padding: '5px 8px', borderColor: 'rgba(239,68,68,0.4)', width: '100%' }}
+      />
+      {results.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '6px', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
+          {results.map(r => (
+            <div key={r.sku} onClick={() => { onSelect(r.sku); setQ(r.sku); setResults([]) }}
+              style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', gap: '8px', alignItems: 'center' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-tertiary)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--accent)', fontSize: '12px', flexShrink: 0 }}>{r.sku}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.descripcion}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
