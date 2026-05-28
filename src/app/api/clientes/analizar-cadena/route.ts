@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     // Resolver equivalencias de SKUs contra el catálogo
     const { generarCandidatos } = await import('@/lib/sku-matcher')
-    const { generarQuerysPorDescripcion, normalizar } = await import('@/lib/search')
+    const { generarEstrategiasBusqueda, normalizar } = await import('@/lib/search')
 
     // Usar skus_detectados (nuevo formato) o ejemplo_skus (fallback)
     const skusRaw: { id: string; desc: string | null }[] = parsed.skus_detectados
@@ -163,22 +163,28 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Sin match — búsqueda semántica por descripción
+        // Sin match — búsqueda semántica por descripción con estrategias múltiples
         let sugerencias: { sku: string; descripcion: string }[] = []
         if (desc) {
-          const queries = generarQuerysPorDescripcion(desc)
+          const estrategias = generarEstrategiasBusqueda(desc)
           const encontrados = new Map<string, { sku: string; descripcion: string }>()
 
-          for (const q of queries) {
+          for (const tokens of estrategias) {
             if (encontrados.size >= 5) break
-            const { data: similares } = await supabase
-              .from('oya_skus').select('sku, descripcion')
-              .ilike('descripcion', `%${q}%`)
-              .eq('activo', true).limit(5)
+            if (tokens.length === 0) continue
+
+            let query = supabase.from('oya_skus').select('sku, descripcion').eq('activo', true)
+
+            if (tokens.length >= 2) {
+              // Búsqueda combinada: ambos tokens deben estar en la descripción
+              query = query.ilike('descripcion', `%${tokens[0]}%`).ilike('descripcion', `%${tokens[1]}%`)
+            } else {
+              query = query.ilike('descripcion', `%${tokens[0]}%`)
+            }
+
+            const { data: similares } = await query.limit(5)
             similares?.forEach(s => {
-              if (!encontrados.has(s.sku)) {
-                encontrados.set(s.sku, s as { sku: string; descripcion: string })
-              }
+              if (!encontrados.has(s.sku)) encontrados.set(s.sku, s as { sku: string; descripcion: string })
             })
           }
           sugerencias = Array.from(encontrados.values()).slice(0, 5)

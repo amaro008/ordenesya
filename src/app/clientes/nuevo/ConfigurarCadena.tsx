@@ -587,31 +587,28 @@ function SkuBusquedaInline({ onSelect }: { onSelect: (sku: string) => void }) {
     if (query.length < 2) { setResults([]); return }
     try {
       const { createClient } = await import('@/lib/supabase-browser')
-      const { generarQuerysPorDescripcion } = await import('@/lib/search')
+      const { generarEstrategiasBusqueda } = await import('@/lib/search')
       const sb = createClient()
-
-      // Búsqueda directa por SKU o código
-      const { data: porSku } = await sb.from('oya_skus')
-        .select('sku, descripcion')
-        .ilike('sku', `%${query}%`)
-        .eq('activo', true).limit(4)
-
-      // Búsqueda semántica por descripción
-      const queries = generarQuerysPorDescripcion(query)
       const encontrados = new Map<string, { sku: string; descripcion: string }>()
+
+      // 1. Búsqueda directa por código SKU
+      const { data: porSku } = await sb.from('oya_skus')
+        .select('sku, descripcion').ilike('sku', `%${query}%`).eq('activo', true).limit(4)
       porSku?.forEach(s => encontrados.set(s.sku, s as any))
 
-      for (const q of queries.slice(0, 4)) {
-        if (encontrados.size >= 8) break
-        const { data: porDesc } = await sb.from('oya_skus')
-          .select('sku, descripcion')
-          .ilike('descripcion', `%${q}%`)
-          .eq('activo', true).limit(6)
-        porDesc?.forEach(s => {
-          if (!encontrados.has(s.sku)) encontrados.set(s.sku, s as any)
-        })
+      // 2. Búsqueda semántica por descripción con estrategias
+      const estrategias = generarEstrategiasBusqueda(query)
+      for (const tokens of estrategias) {
+        if (encontrados.size >= 8 || !tokens.length) break
+        let q = sb.from('oya_skus').select('sku, descripcion').eq('activo', true)
+        if (tokens.length >= 2) {
+          q = q.ilike('descripcion', `%${tokens[0]}%`).ilike('descripcion', `%${tokens[1]}%`)
+        } else {
+          q = q.ilike('descripcion', `%${tokens[0]}%`)
+        }
+        const { data } = await q.limit(6)
+        data?.forEach(s => { if (!encontrados.has(s.sku)) encontrados.set(s.sku, s as any) })
       }
-
       setResults(Array.from(encontrados.values()).slice(0, 8))
     } catch { setResults([]) }
   }

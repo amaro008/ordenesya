@@ -180,7 +180,7 @@ export default function ConfiguracionPanel() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(400px, 2fr)', gap: '16px', alignItems: 'start' }}>
 
         {/* ── Columna izquierda: Modelo de IA ── */}
         <Section icon={<Brain size={16} />} title="Modelo de IA" subtitle="Selecciona el modelo que usará la app para interpretar las órdenes de compra">

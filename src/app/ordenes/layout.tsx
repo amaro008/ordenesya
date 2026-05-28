@@ -24,7 +24,7 @@ export default async function LayoutDashboard({ children }: { children: React.Re
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Sidebar usuario={usuario || { nombre: session.user.email || '', email: session.user.email || '' }} />
-      <main style={{ flex: 1, marginLeft: '220px', padding: '32px', overflow: 'hidden' }}>
+      <main style={{ flex: 1, marginLeft: '220px', padding: '32px', overflow: 'auto', minWidth: 0 }}>
         {children}
       </main>
     </div>

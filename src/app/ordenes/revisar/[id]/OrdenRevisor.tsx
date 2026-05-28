@@ -54,15 +54,20 @@ export default function OrdenRevisor({ id }: { id: string }) {
     const { data: porSku } = await supabase.from('oya_skus')
       .select('sku, descripcion').ilike('sku', `%${query}%`).eq('activo', true).limit(4)
 
-    const { generarQuerysPorDescripcion } = await import('@/lib/search')
-    const queries = generarQuerysPorDescripcion(query)
+    const { generarEstrategiasBusqueda } = await import('@/lib/search')
     const encontrados = new Map<string, SKU>()
     porSku?.forEach((s: any) => encontrados.set(s.sku, s))
 
-    for (const q of queries.slice(0, 4)) {
-      if (encontrados.size >= 8) break
-      const { data: porDesc } = await supabase.from('oya_skus')
-        .select('sku, descripcion').ilike('descripcion', `%${q}%`).eq('activo', true).limit(6)
+    const estrategias = generarEstrategiasBusqueda(query)
+    for (const tokens of estrategias) {
+      if (encontrados.size >= 8 || !tokens.length) break
+      let dbQuery = supabase.from('oya_skus').select('sku, descripcion').eq('activo', true)
+      if (tokens.length >= 2) {
+        dbQuery = dbQuery.ilike('descripcion', `%${tokens[0]}%`).ilike('descripcion', `%${tokens[1]}%`)
+      } else {
+        dbQuery = dbQuery.ilike('descripcion', `%${tokens[0]}%`)
+      }
+      const { data: porDesc } = await dbQuery.limit(6)
       porDesc?.forEach((s: any) => { if (!encontrados.has(s.sku)) encontrados.set(s.sku, s) })
     }
     setSkuResults(prev => ({ ...prev, [detalleId]: Array.from(encontrados.values()).slice(0, 8) }))

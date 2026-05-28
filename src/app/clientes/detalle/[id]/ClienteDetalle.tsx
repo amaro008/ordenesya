@@ -122,15 +122,21 @@ export default function ClienteDetalle() {
       .select('sku, descripcion').ilike('sku', `%${q}%`).eq('activo', true).limit(4)
 
     // Búsqueda semántica por descripción
-    const { generarQuerysPorDescripcion } = await import('@/lib/search')
-    const queries = generarQuerysPorDescripcion(q)
+    const { generarEstrategiasBusqueda } = await import('@/lib/search')
+    
     const encontrados = new Map<string, any>()
     porSku?.forEach((s: any) => encontrados.set(s.sku, s))
 
-    for (const query of queries.slice(0, 4)) {
-      if (encontrados.size >= 8) break
-      const { data: porDesc } = await supabase.from('oya_skus')
-        .select('sku, descripcion').ilike('descripcion', `%${query}%`).eq('activo', true).limit(6)
+    const estrategias = generarEstrategiasBusqueda(q)
+    for (const tokens of estrategias) {
+      if (encontrados.size >= 8 || !tokens.length) break
+      let dbQuery = supabase.from('oya_skus').select('sku, descripcion').eq('activo', true)
+      if (tokens.length >= 2) {
+        dbQuery = dbQuery.ilike('descripcion', `%${tokens[0]}%`).ilike('descripcion', `%${tokens[1]}%`)
+      } else {
+        dbQuery = dbQuery.ilike('descripcion', `%${tokens[0]}%`)
+      }
+      const { data: porDesc } = await dbQuery.limit(6)
       porDesc?.forEach((s: any) => { if (!encontrados.has(s.sku)) encontrados.set(s.sku, s) })
     }
     setSkuResults(Array.from(encontrados.values()).slice(0, 8))
