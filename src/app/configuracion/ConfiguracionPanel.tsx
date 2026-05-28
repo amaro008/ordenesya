@@ -76,20 +76,30 @@ export default function ConfiguracionPanel() {
   async function cambiarModelo(modelo: typeof MODELOS[0]) {
     setGuardandoModelo(true)
     try {
-      await fetch('/api/configuracion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave: 'ai_provider', valor: modelo.provider }),
-      })
-      await fetch('/api/configuracion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave: 'ai_model', valor: modelo.model }),
-      })
+      const [r1, r2] = await Promise.all([
+        fetch('/api/configuracion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clave: 'ai_provider', valor: modelo.provider }),
+        }),
+        fetch('/api/configuracion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clave: 'ai_model', valor: modelo.model }),
+        }),
+      ])
+
+      const d1 = await r1.json()
+      const d2 = await r2.json()
+
+      if (!r1.ok || !r2.ok) {
+        throw new Error(d1.error || d2.error || 'Error guardando')
+      }
+
       setModeloActivo(modelo.model)
       toast.success(`Modelo cambiado a ${modelo.nombre}`)
-    } catch {
-      toast.error('Error guardando configuración')
+    } catch (err: any) {
+      toast.error(`Error: ${err.message} — Verifica que corriste la migración v4 en Supabase`)
     } finally {
       setGuardandoModelo(false)
     }

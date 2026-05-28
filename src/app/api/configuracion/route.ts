@@ -13,11 +13,16 @@ export async function GET() {
 
     if (error) throw error
 
-    const config: Record<string, string> = {}
+    const config: Record<string, string> = {
+      // Defaults si la tabla está vacía
+      ai_provider: 'claude',
+      ai_model: 'claude-haiku-4-5',
+    }
     data?.forEach(row => { config[row.clave] = row.valor })
     return NextResponse.json(config)
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error('[Config GET]', err)
+    return NextResponse.json({ ai_provider: 'claude', ai_model: 'claude-haiku-4-5' })
   }
 }
 
@@ -30,20 +35,34 @@ export async function POST(request: NextRequest) {
     const { clave, valor } = await request.json()
     if (!clave || !valor) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
 
-    const { error } = await supabase
+    // Intentar UPDATE primero
+    const { data: updated, error: updateError } = await supabase
       .from('oya_configuracion')
-      .upsert(
-        { clave, valor, updated_at: new Date().toISOString() },
-        { onConflict: 'clave' }
-      )
+      .update({ valor, updated_at: new Date().toISOString() })
+      .eq('clave', clave)
+      .select()
 
-    if (error) {
-      console.error('Error guardando config:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError) {
+      console.error('[Config UPDATE]', updateError)
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
+    // Si no actualizó ninguna fila, hacer INSERT
+    if (!updated || updated.length === 0) {
+      const { error: insertError } = await supabase
+        .from('oya_configuracion')
+        .insert({ clave, valor, updated_at: new Date().toISOString() })
+
+      if (insertError) {
+        console.error('[Config INSERT]', insertError)
+        return NextResponse.json({ error: insertError.message }, { status: 500 })
+      }
+    }
+
+    console.log(`[Config] ${clave} = ${valor}`)
     return NextResponse.json({ ok: true, clave, valor })
   } catch (err: any) {
+    console.error('[Config POST]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
