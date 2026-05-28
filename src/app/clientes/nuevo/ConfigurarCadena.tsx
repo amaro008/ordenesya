@@ -17,6 +17,14 @@ interface OcCargada {
   preview?: string // número de OC detectado
 }
 
+interface EquivalenciaDetectada {
+  id_cliente: string           // código tal como viene en la OC
+  descripcion_cliente: string | null
+  sku_interno: string | null   // resuelto automáticamente
+  sugerencias: string[]        // hasta 3 SKUs sugeridos por similitud
+  estado: 'resuelto' | 'sugerido' | 'pendiente'
+}
+
 interface AnalisisCadena {
   nombre_cadena: string
   razon_social: string | null
@@ -26,7 +34,8 @@ interface AnalisisCadena {
   formato_skus: string           // descripción del patrón
   identificadores: { tipo: string; valor: string }[]
   comedores: string[]            // ubicaciones detectadas
-  ejemplo_skus: string[]         // muestra de códigos encontrados
+  ejemplo_skus: string[]
+  equivalencias: EquivalenciaDetectada[]
 }
 
 interface IdentificadorEditable {
@@ -55,6 +64,7 @@ export default function ConfigurarCadena() {
   const [analizando, setAnalizando] = useState(false)
   const [analisis, setAnalisis] = useState<AnalisisCadena | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const [equivalencias, setEquivalencias] = useState<EquivalenciaDetectada[]>([])
 
   // Campos editables post-análisis
   const [nombre, setNombre] = useState('')
@@ -126,6 +136,7 @@ export default function ConfigurarCadena() {
       setCentro(data.centro || '')
       setAlmacen(data.almacen || '')
       setIdentificadores(data.identificadores || [])
+      setEquivalencias(data.equivalencias || [])
       setAnalisis(data)
 
       // Advertir si la IA confundió al proveedor con la cadena
@@ -172,6 +183,21 @@ export default function ConfigurarCadena() {
 
     if (ids.length > 0) {
       await supabase.from('oya_cliente_identifiers').insert(ids)
+    }
+
+    // Guardar equivalencias resueltas y las que el usuario completó
+    const equivParaGuardar = equivalencias
+      .filter(e => e.sku_interno?.trim())
+      .map(e => ({
+        cliente_id: cliente.id,
+        id_cliente: e.id_cliente,
+        sku_interno: e.sku_interno!,
+        descripcion_cliente: e.descripcion_cliente || null,
+      }))
+
+    if (equivParaGuardar.length > 0) {
+      await supabase.from('oya_equivalencias')
+        .upsert(equivParaGuardar, { onConflict: 'cliente_id,id_cliente' })
     }
 
     toast.success('Cadena configurada correctamente')
@@ -394,6 +420,93 @@ export default function ConfigurarCadena() {
                   </span>
                 ))}
               </div>
+            </Section>
+          )}
+
+          {/* Equivalencias de SKUs */}
+          {equivalencias.length > 0 && (
+            <Section
+              title={`SKUs detectados (${equivalencias.length})`}
+              subtitle="Revisa el mapeo de códigos de la OC al catálogo interno"
+            >
+              {/* Resumen */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Resueltos', count: equivalencias.filter(e => e.estado === 'resuelto').length, color: 'var(--success)' },
+                  { label: 'Con sugerencias', count: equivalencias.filter(e => e.estado === 'sugerido').length, color: 'var(--warning)' },
+                  { label: 'Pendientes', count: equivalencias.filter(e => e.estado === 'pendiente').length, color: 'var(--danger)' },
+                ].map(({ label, count, color }) => count > 0 && (
+                  <span key={label} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: `${color}15`, color, fontWeight: '500' }}>
+                    {count} {label}
+                  </span>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
+                {equivalencias.map((eq, idx) => (
+                  <div key={idx} style={{
+                    display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center', gap: '8px',
+                    padding: '10px 12px',
+                    background: eq.estado === 'resuelto' ? 'rgba(34,197,94,0.05)'
+                              : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.05)'
+                              : 'rgba(239,68,68,0.05)',
+                    border: `1px solid ${eq.estado === 'resuelto' ? 'rgba(34,197,94,0.2)'
+                           : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.2)'
+                           : 'rgba(239,68,68,0.2)'}`,
+                    borderRadius: '7px',
+                  }}>
+                    {/* ID del cliente */}
+                    <div>
+                      <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>{eq.id_cliente}</p>
+                      {eq.descripcion_cliente && (
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {eq.descripcion_cliente}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Flecha */}
+                    <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>→</span>
+
+                    {/* SKU interno */}
+                    <div>
+                      {eq.estado === 'resuelto' ? (
+                        <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--success)' }}>
+                          {eq.sku_interno}
+                        </p>
+                      ) : eq.estado === 'sugerido' ? (
+                        <select
+                          value={eq.sku_interno || ''}
+                          onChange={e => setEquivalencias(prev => prev.map((x, i) =>
+                            i === idx ? { ...x, sku_interno: e.target.value || null, estado: e.target.value ? 'resuelto' : 'pendiente' } : x
+                          ))}
+                          style={{ fontSize: '12px', padding: '4px 6px', fontFamily: 'monospace' }}
+                        >
+                          <option value="">— Seleccionar —</option>
+                          {eq.sugerencias.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                          <option value="">Ninguno</option>
+                        </select>
+                      ) : (
+                        <input
+                          value={eq.sku_interno || ''}
+                          onChange={e => setEquivalencias(prev => prev.map((x, i) =>
+                            i === idx ? { ...x, sku_interno: e.target.value || null } : x
+                          ))}
+                          placeholder="Buscar SKU..."
+                          style={{ fontSize: '12px', padding: '4px 8px', fontFamily: 'monospace', borderColor: 'rgba(239,68,68,0.4)' }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>
+                Los pendientes se pueden completar después desde el perfil de la cadena.
+              </p>
             </Section>
           )}
 

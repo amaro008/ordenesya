@@ -1,17 +1,54 @@
 import type { GeminiOrdenResponse } from '@/types'
 
+// Lee el proveedor activo desde BD (oya_configuracion) o fallback a env vars
+export async function getProveedorActivo(): Promise<{ provider: 'claude' | 'gemini'; model: string }> {
+  try {
+    // Intentar leer de Supabase
+    const { createClient } = await import('./supabase')
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('oya_configuracion')
+      .select('clave, valor')
+      .in('clave', ['ai_provider', 'ai_model'])
+
+    const cfg: Record<string, string> = {}
+    data?.forEach(r => { cfg[r.clave] = r.valor })
+
+    const provider = (cfg['ai_provider'] || process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
+    const model = cfg['ai_model'] ||
+      (provider === 'claude'
+        ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
+        : process.env.GEMINI_MODEL || 'gemini-1.5-pro')
+
+    return { provider, model }
+  } catch {
+    // Fallback a env vars si no hay BD disponible
+    const provider = (process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
+    const model = provider === 'claude'
+      ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
+      : process.env.GEMINI_MODEL || 'gemini-1.5-pro'
+    return { provider, model }
+  }
+}
+
+// Compatibilidad anterior
+export type AIProvider = 'gemini' | 'claude'
+export function getActiveProvider(): AIProvider {
+  return (process.env.AI_PROVIDER || 'claude') as AIProvider
+}
+
 const SYSTEM_PROMPT = `Eres un sistema experto en interpretar órdenes de compra (OC) de proveedores de alimentos en México.
 Devuelve ÚNICAMENTE un JSON válido sin markdown ni explicaciones.
 
 ESTRUCTURA EXACTA:
 {
   "cadena_detectada": {
-    "nombre": "nombre de la empresa/cadena que EMITE la OC (el emisor del documento: Arte Di Piatto, Aramark, Favorite Vegan Food, etc.)",
-    "rfc": "RFC del emisor si aparece en el documento",
-    "identificadores": ["otros identificadores del emisor: nombre del sistema, plataforma, etc."]
+    "nombre": "nombre de la empresa/cadena que COMPRA — la del membrete/logo del documento",
+    "rfc": "RFC del comprador del membrete o null",
+    "identificadores": ["otros identificadores del comprador: dominio de correo, nombre de plataforma"]
   },
-  "comedor": "nombre del comedor o ubicación específica — campo COMEDOR del documento (Borgwarner, Navistar, Vertiv Apodaca, NEMAK SALTILLO, etc.)",
-  "numero_oc": "número de OC (MPO XXXX, MPE XXXX, FOLIO NKSXXXX, etc.) o null",
+  "comedor": "valor del campo COMEDOR del documento (Borgwarner, Navistar, NEMAK SALTILLO, etc.) o null",
+  "numero_oc": "MPO XXXX, MPE XXXX, FOLIO NKSXXXX, etc. o null",
   "fecha_oc": "YYYY-MM-DD o null",
   "subtotal": 0.0,
   "iva": 0.0,
@@ -30,69 +67,58 @@ ESTRUCTURA EXACTA:
   "notas": null
 }
 
-== REGLA CRÍTICA: DOS NIVELES DE EMPRESA ==
-Estos documentos tienen DOS entidades distintas que NO debes confundir:
+== DOS EMPRESAS EN EL DOCUMENTO — NO LAS CONFUNDAS ==
 
-NIVEL 1 — CADENA/EMISOR (quien emite la OC, el comprador):
-- Es la empresa del membrete del documento: Arte Di Piatto, Favorite Vegan Food, Aramark, etc.
-- Tiene su propio RFC: ADP021022MM0, FVF1607088M2, AME950116SJ1, etc.
-- Va en "cadena_detectada"
+COMPRADOR/CADENA (quien emite la OC — VAS A EXTRAER ESTE):
+- Aparece en el MEMBRETE/LOGO: Arte Di Piatto, Favorite Vegan Food, Aramark, Kitcheny
+- Su RFC está en el membrete: ADP021022MM0, FVF1607088M2, AME950116SJ1
+- Los correos terminan en @platoexpress.com o dominio propio
 
-NIVEL 2 — COMEDOR/UBICACIÓN (la ubicación específica que recibe el pedido):
-- Es el campo "COMEDOR" del documento: Borgwarner, Navistar, Vertiv Apodaca, NEMAK SALTILLO, Lab Griffith
-- Es UNA ubicación específica de la cadena
-- Va en el campo "comedor"
+PROVEEDOR/VENDEDOR (quien RECIBE la OC — IGNORA ESTE):
+- Aparece en el campo "PROVEEDOR": SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V
+- RFC: CNO930113K12 — NUNCA incluir como identificador del comprador
+- Es el receptor de la OC, no el emisor
 
-NIVEL 3 — PROVEEDOR/VENDEDOR (quien RECIBE la OC):
-- Es SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V con RFC CNO930113K12
-- Aparece en el campo "PROVEEDOR" del cuerpo del documento
-- NUNCA va en cadena_detectada — es el vendedor, no el comprador
-- Su RFC CNO930113K12 NO debe aparecer como identificador de la cadena
+COMEDOR = campo "COMEDOR" del documento: Borgwarner, Navistar, Vertiv Apodaca, Lab Griffith
 
 == LÍNEAS DE PRODUCTO ==
 - Columnas: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "SKU", "Código"
 - Extrae el código TAL COMO APARECE: SIG8912, 8666SIG, 8964RY, 66, 70060146, 942SIG, 307
-- NO confundas centros de costos ni IDs de sistema con códigos de producto
 - Tabla semanal Aramark: suma cantidades de todos los días
 
 == TOTALES ==
-- Extrae subtotal, IVA y total si aparecen
-- Punto decimal, no coma: 1625.00 no 1,625.00
-- Si no aparece usa 0`
+Punto decimal no coma. Si no aparece usa 0.`
 
 function parseJson(text: string): GeminiOrdenResponse {
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  try {
-    return JSON.parse(clean) as GeminiOrdenResponse
-  } catch {
-    throw new Error('La IA devolvió una respuesta que no es JSON válido')
-  }
+  try { return JSON.parse(clean) as GeminiOrdenResponse }
+  catch { throw new Error('La IA devolvió una respuesta que no es JSON válido') }
 }
 
-async function interpretarConGemini(base64: string, mimeType: string): Promise<GeminiOrdenResponse> {
+async function interpretarConGemini(base64: string, mimeType: string, model: string): Promise<GeminiOrdenResponse> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-pro' })
-  const result = await model.generateContent([
+  const m = genAI.getGenerativeModel({ model })
+  const result = await m.generateContent([
     { inlineData: { mimeType, data: base64 } },
     { text: `${SYSTEM_PROMPT}\n\nAnaliza este documento:` },
   ])
   return parseJson(result.response.text())
 }
 
-async function interpretarConClaude(base64: string, mimeType: string): Promise<GeminiOrdenResponse> {
+async function interpretarConClaude(base64: string, mimeType: string, model: string): Promise<GeminiOrdenResponse> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
   const isPdf = mimeType === 'application/pdf'
   type CB =
     | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
-    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string } }
+    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'|'image/png'|'image/webp'|'image/gif'; data: string } }
     | { type: 'text'; text: string }
   const mediaBlock: CB = isPdf
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
     : { type: 'image', source: { type: 'base64', media_type: mimeType as any, data: base64 } }
   const message = await client.messages.create({
-    model: process.env.CLAUDE_MODEL || 'claude-haiku-4-5',
+    model,
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: [mediaBlock, { type: 'text', text: 'Analiza este documento:' }] as any }],
@@ -102,23 +128,13 @@ async function interpretarConClaude(base64: string, mimeType: string): Promise<G
   return parseJson(block.text)
 }
 
-export type AIProvider = 'gemini' | 'claude'
-
-export function getActiveProvider(): AIProvider {
-  const cfg = process.env.AI_PROVIDER?.toLowerCase()
-  if (cfg === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
-  if (cfg === 'claude' && process.env.ANTHROPIC_API_KEY) return 'claude'
-  if (process.env.GEMINI_API_KEY) return 'gemini'
-  if (process.env.ANTHROPIC_API_KEY) return 'claude'
-  throw new Error('No hay proveedor de IA. Agrega GEMINI_API_KEY o ANTHROPIC_API_KEY.')
-}
-
 export async function interpretarOrdenConIA(base64: string, mimeType: string) {
-  const proveedor = getActiveProvider()
-  const resultado = proveedor === 'gemini'
-    ? await interpretarConGemini(base64, mimeType)
-    : await interpretarConClaude(base64, mimeType)
-  return { resultado, proveedor }
+  const { provider, model } = await getProveedorActivo()
+  console.log(`[AI] ${provider} / ${model}`)
+  const resultado = provider === 'gemini'
+    ? await interpretarConGemini(base64, mimeType, model)
+    : await interpretarConClaude(base64, mimeType, model)
+  return { resultado, proveedor: provider }
 }
 
 export async function interpretarOrdenConGemini(base64: string, mimeType: string) {

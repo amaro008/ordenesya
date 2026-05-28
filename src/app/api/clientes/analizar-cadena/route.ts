@@ -124,7 +124,52 @@ export async function POST(request: NextRequest) {
     const clean = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const parsed = JSON.parse(clean)
 
-    // Asegurar estructura mínima
+    // Resolver equivalencias de SKUs contra el catálogo
+    const { generarCandidatos } = await import('@/lib/sku-matcher')
+
+    const skusRaw: { id: string; desc: string | null }[] = (parsed.ejemplo_skus || [])
+      .map((sku: string) => ({ id: sku, desc: null }))
+
+    // También extraer de lineas si el JSON las trae
+    // (el prompt devuelve ejemplo_skus, no lineas completas)
+
+    const equivalencias = await Promise.all(
+      skusRaw.map(async ({ id, desc }) => {
+        const candidatos = generarCandidatos(id.toUpperCase())
+
+        // Buscar match exacto o por strip
+        for (const c of candidatos) {
+          const { data } = await supabase
+            .from('oya_skus').select('sku, descripcion')
+            .eq('sku', c).eq('activo', true).single()
+          if (data) {
+            return { id_cliente: id, descripcion_cliente: desc, sku_interno: data.sku, sugerencias: [], estado: 'resuelto' }
+          }
+        }
+
+        // Sin match — buscar sugerencias por descripción si hay
+        let sugerencias: string[] = []
+        if (desc) {
+          const palabras = desc.split(' ').filter(p => p.length > 3).slice(0, 3).join(' | ')
+          if (palabras) {
+            const { data: similares } = await supabase
+              .from('oya_skus').select('sku, descripcion')
+              .ilike('descripcion', `%${palabras.split(' | ')[0]}%`)
+              .eq('activo', true).limit(3)
+            sugerencias = (similares || []).map(s => s.sku)
+          }
+        }
+
+        return {
+          id_cliente: id,
+          descripcion_cliente: desc,
+          sku_interno: sugerencias[0] || null,
+          sugerencias,
+          estado: sugerencias.length > 0 ? 'sugerido' : 'pendiente',
+        }
+      })
+    )
+
     return NextResponse.json({
       nombre_cadena:   parsed.nombre_cadena || null,
       razon_social:    parsed.razon_social || null,
@@ -135,6 +180,7 @@ export async function POST(request: NextRequest) {
       comedores:       parsed.comedores || [],
       formato_skus:    parsed.formato_skus || null,
       ejemplo_skus:    parsed.ejemplo_skus || [],
+      equivalencias,
       ocs_procesadas:  parsed.ocs_procesadas || archivos.map(() => ({ numero_oc: null })),
     })
 
