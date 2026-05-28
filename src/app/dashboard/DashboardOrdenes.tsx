@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient as createBrowserClient } from '@/lib/supabase-browser'
 import { FileText, Trash2, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -25,17 +25,45 @@ const estadoLabel: Record<string, { label: string; color: string }> = {
   exportado:  { label: 'Exportado',  color: 'var(--accent)' },
 }
 
-export default function DashboardOrdenes({
-  ordenes: initialOrdenes,
-  filtroActivo,
-}: {
-  ordenes: Orden[]
-  filtroActivo: string
-}) {
+const FILTROS = [
+  { key: 'activas',    label: 'Activas',    estados: ['borrador', 'revisando'] },
+  { key: 'procesadas', label: 'Procesadas', estados: ['confirmado', 'exportado'] },
+  { key: 'todas',      label: 'Todas',      estados: [] },
+]
+
+export default function DashboardOrdenes({ userId }: { userId: string }) {
+  const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createBrowserClient()
-  const [ordenes, setOrdenes] = useState(initialOrdenes)
+
+  const filtroActivo = searchParams.get('estado') || 'activas'
+  const [ordenes, setOrdenes] = useState<Orden[]>([])
+  const [cargando, setCargando] = useState(true)
   const [eliminando, setEliminando] = useState<string | null>(null)
+
+  useEffect(() => {
+    cargarOrdenes()
+  }, [filtroActivo])
+
+  async function cargarOrdenes() {
+    setCargando(true)
+    const filtro = FILTROS.find(f => f.key === filtroActivo) || FILTROS[0]
+
+    let query = supabase
+      .from('oya_ordenes')
+      .select('id, numero_oc, estado, total_lineas, lineas_conflicto, lineas_resueltas, created_at, oya_clientes(nombre)')
+      .eq('asesor_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (filtro.estados.length > 0) {
+      query = query.in('estado', filtro.estados)
+    }
+
+    const { data } = await query
+    setOrdenes((data as any) || [])
+    setCargando(false)
+  }
 
   async function eliminarOrden(id: string) {
     if (!confirm('¿Eliminar esta orden? Esta acción no se puede deshacer.')) return
@@ -53,11 +81,11 @@ export default function DashboardOrdenes({
     }
   }
 
-  const FILTROS = [
-    { key: 'activas',    label: 'Activas' },
-    { key: 'procesadas', label: 'Procesadas' },
-    { key: 'todas',      label: 'Todas' },
-  ]
+  function cambiarFiltro(key: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('estado', key)
+    router.push(`/dashboard?${params.toString()}`, { scroll: false })
+  }
 
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
@@ -66,20 +94,28 @@ export default function DashboardOrdenes({
         <h2 style={{ fontSize: '15px', fontWeight: '600' }}>Mis órdenes</h2>
         <div style={{ display: 'flex', gap: '6px' }}>
           {FILTROS.map(f => (
-            <Link key={f.key} href={`/dashboard?estado=${f.key}`} style={{
-              padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500',
-              textDecoration: 'none',
-              background: filtroActivo === f.key ? 'var(--accent)' : 'var(--bg-tertiary)',
-              color: filtroActivo === f.key ? 'white' : 'var(--text-secondary)',
-              transition: 'all 0.15s',
-            }}>
+            <button
+              key={f.key}
+              onClick={() => cambiarFiltro(f.key)}
+              style={{
+                padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500',
+                border: 'none', cursor: 'pointer',
+                background: filtroActivo === f.key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                color: filtroActivo === f.key ? 'white' : 'var(--text-secondary)',
+                transition: 'all 0.15s',
+              }}
+            >
               {f.label}
-            </Link>
+            </button>
           ))}
         </div>
       </div>
 
-      {!ordenes.length ? (
+      {cargando ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+          <Loader2 size={16} className="animate-spin" /> Cargando órdenes...
+        </div>
+      ) : !ordenes.length ? (
         <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <FileText size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
           <p style={{ fontSize: '14px', marginBottom: '8px' }}>
@@ -93,7 +129,7 @@ export default function DashboardOrdenes({
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-primary)' }}>
-              {['Cliente', 'No. OC', 'Líneas', 'Estado', 'Fecha', ''].map(h => (
+              {['Cliente / Comedor', 'No. OC', 'Líneas', 'Estado', 'Fecha', ''].map(h => (
                 <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500' }}>{h}</th>
               ))}
             </tr>
@@ -103,7 +139,7 @@ export default function DashboardOrdenes({
               <tr key={orden.id} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ padding: '11px 16px', fontSize: '14px' }}>
                   <Link href={`/ordenes/revisar/${orden.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: '500' }}>
-                    {orden.oya_clientes?.nombre || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin asignar</span>}
+                    {orden.oya_clientes?.nombre || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin cadena</span>}
                   </Link>
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
@@ -111,8 +147,7 @@ export default function DashboardOrdenes({
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: '13px' }}>
                   <span style={{ color: orden.lineas_conflicto > 0 ? 'var(--warning)' : 'var(--text-secondary)' }}>
-                    {orden.total_lineas} líneas
-                    {orden.lineas_conflicto > 0 && ` · ${orden.lineas_conflicto} ⚠`}
+                    {orden.total_lineas} líneas{orden.lineas_conflicto > 0 && ` · ${orden.lineas_conflicto} ⚠`}
                   </span>
                 </td>
                 <td style={{ padding: '11px 16px' }}>
@@ -127,14 +162,11 @@ export default function DashboardOrdenes({
                   <button
                     onClick={() => eliminarOrden(orden.id)}
                     disabled={eliminando === orden.id}
-                    title="Eliminar orden"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '5px', transition: 'all 0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent' }}
                   >
-                    {eliminando === orden.id
-                      ? <Loader2 size={14} className="animate-spin" />
-                      : <Trash2 size={14} />}
+                    {eliminando === orden.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
                 </td>
               </tr>

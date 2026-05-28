@@ -3,32 +3,32 @@ import type { GeminiOrdenResponse } from '@/types'
 // Lee el proveedor activo desde BD (oya_configuracion) o fallback a env vars
 export async function getProveedorActivo(): Promise<{ provider: 'claude' | 'gemini'; model: string }> {
   try {
-    // Intentar leer de Supabase
     const { createClient } = await import('./supabase')
     const supabase = createClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('oya_configuracion')
       .select('clave, valor')
       .in('clave', ['ai_provider', 'ai_model'])
 
-    const cfg: Record<string, string> = {}
-    data?.forEach(r => { cfg[r.clave] = r.valor })
+    if (!error && data && data.length > 0) {
+      const cfg: Record<string, string> = {}
+      data.forEach(r => { cfg[r.clave] = r.valor })
 
-    const provider = (cfg['ai_provider'] || process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
-    const model = cfg['ai_model'] ||
-      (provider === 'claude'
-        ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
-        : process.env.GEMINI_MODEL || 'gemini-1.5-pro')
-
-    return { provider, model }
-  } catch {
-    // Fallback a env vars si no hay BD disponible
-    const provider = (process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
-    const model = provider === 'claude'
-      ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
-      : process.env.GEMINI_MODEL || 'gemini-1.5-pro'
-    return { provider, model }
+      const provider = (cfg['ai_provider'] || 'claude') as 'claude' | 'gemini'
+      const model = cfg['ai_model'] ||
+        (provider === 'claude' ? 'claude-haiku-4-5' : 'gemini-1.5-pro')
+      return { provider, model }
+    }
+  } catch (e) {
+    console.warn('[AI] No se pudo leer config de BD, usando env vars:', e)
   }
+
+  // Fallback a env vars
+  const provider = (process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
+  const model = provider === 'claude'
+    ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
+    : process.env.GEMINI_MODEL || 'gemini-1.5-pro'
+  return { provider, model }
 }
 
 // Compatibilidad anterior

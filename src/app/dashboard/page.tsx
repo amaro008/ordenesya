@@ -1,13 +1,10 @@
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { FileText, Users, CheckCircle, AlertCircle, Plus } from 'lucide-react'
+import { Suspense } from 'react'
 import DashboardOrdenes from './DashboardOrdenes'
 
-export default async function PaginaDashboard({
-  searchParams,
-}: {
-  searchParams: { estado?: string }
-}) {
+export default async function PaginaDashboard() {
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
 
@@ -24,27 +21,10 @@ export default async function PaginaDashboard({
       supabase.from('oya_ordenes').select('*', { count: 'exact', head: true }).eq('asesor_id', uid).in('estado', ['revisando', 'borrador']),
     ])
 
-  const filtroEstado = searchParams.estado || 'activas'
-
-  let ordenesQuery = supabase
-    .from('oya_ordenes')
-    .select('id, numero_oc, estado, total_lineas, lineas_conflicto, lineas_resueltas, created_at, oya_clientes(nombre)')
-    .eq('asesor_id', uid)
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  if (filtroEstado === 'activas') {
-    ordenesQuery = ordenesQuery.in('estado', ['borrador', 'revisando'])
-  } else if (filtroEstado === 'procesadas') {
-    ordenesQuery = ordenesQuery.in('estado', ['confirmado', 'exportado'])
-  }
-
-  const { data: ordenes } = await ordenesQuery
-
   const stats = [
     { label: 'Órdenes totales', value: totalOrdenes || 0,  icon: FileText,    color: 'var(--accent)' },
     { label: 'Hoy',            value: ordenesHoy || 0,    icon: CheckCircle, color: 'var(--success)' },
-    { label: 'Clientes',       value: totalClientes || 0, icon: Users,       color: '#a78bfa' },
+    { label: 'Cadenas',        value: totalClientes || 0, icon: Users,       color: '#a78bfa' },
     { label: 'En revisión',    value: enRevision || 0,    icon: AlertCircle, color: 'var(--warning)' },
   ]
 
@@ -79,8 +59,10 @@ export default async function PaginaDashboard({
         ))}
       </div>
 
-      {/* Órdenes con filtro y acciones */}
-      <DashboardOrdenes ordenes={(ordenes || []) as any} filtroActivo={filtroEstado} />
+      {/* Órdenes — client component con filtros */}
+      <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando órdenes...</div>}>
+        <DashboardOrdenes userId={uid!} />
+      </Suspense>
     </div>
   )
 }
