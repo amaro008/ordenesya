@@ -3,25 +3,28 @@ import { createClient } from '@/lib/supabase'
 import { getMimeType } from '@/lib/ai-provider'
 import Anthropic from '@anthropic-ai/sdk'
 
-const PROMPT = `Analiza esta orden de compra y extrae información del EMISOR (quien compra/emite la OC).
+const PROMPT = `Analiza esta orden de compra y extrae datos del COMPRADOR (quien emite la OC).
 Devuelve SOLO JSON sin markdown:
 {
-  "nombre_cadena": "nombre de la empresa emisora del documento (membrete): Arte Di Piatto, Aramark, Favorite Vegan Food, etc.",
-  "razon_social": "razón social completa del emisor si aparece, o null",
-  "rfc_emisor": "RFC del emisor (ej: ADP021022MM0, FVF1607088M2) o null",
-  "comedor": "valor del campo COMEDOR o ubicación específica (Borgwarner, Navistar, etc.) o null",
+  "nombre_cadena": "texto del MEMBRETE/LOGO en la esquina superior — NO el campo PROVEEDOR del cuerpo",
+  "razon_social": "razón social si aparece explícitamente en el membrete, o igual al nombre_cadena",
+  "rfc_emisor": "RFC del membrete (ej: ADP021022MM0) — NO el RFC del proveedor (CNO930113K12)",
+  "comedor": "valor del campo COMEDOR (Borgwarner, Navistar, etc.) o null",
   "identificadores": [
-    { "tipo": "nombre_cadena", "valor": "nombre exacto de la cadena como aparece" },
-    { "tipo": "rfc_emisor", "valor": "RFC del emisor" }
+    { "tipo": "rfc_emisor",    "valor": "RFC del membrete" },
+    { "tipo": "nombre_cadena", "valor": "nombre del membrete" },
+    { "tipo": "otro",          "valor": "dominio de correo (platoexpress.com)" },
+    { "tipo": "otro",          "valor": "nombre plataforma si aparece (Plato Express)" }
   ]
 }
 
-REGLAS:
-- El EMISOR es quien aparece en el membrete: Arte Di Piatto, Aramark, Favorite Vegan Food
-- El PROVEEDOR (SIGMA FOODSERVICE) es el vendedor — NO lo incluyas
-- El COMEDOR (Borgwarner, Navistar) es la ubicación — ponlo en "comedor" pero NO en identificadores
-- El RFC del emisor es el identificador más importante
-- NO incluyas el folio/número de OC como identificador`
+REGLA CRÍTICA:
+- El MEMBRETE/LOGO (esquina superior) = el COMPRADOR → va en nombre_cadena
+- El campo "PROVEEDOR" del cuerpo = SIGMA FOODSERVICE = el VENDEDOR → IGNORAR
+- Si nombre_cadena contiene "SIGMA" o "FOODSERVICE" está incorrecto
+- RFC CNO930113K12 es de SIGMA — nunca va en rfc_emisor
+- El COMEDOR (Borgwarner, Navistar) no es identificador de cadena
+- Dominio de correo de compradores SÍ es identificador (ej: platoexpress.com)`
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,9 +84,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       nombre_cadena: parsed.nombre_cadena || null,
-      razon_social: parsed.razon_social || null,
-      rfc_emisor: parsed.rfc_emisor || null,
-      comedor: parsed.comedor || null,
+      razon_social:  parsed.razon_social  || null,
+      rfc_emisor:    parsed.rfc_emisor    || null,
+      comedor:       parsed.comedor       || null,
       identificadores,
     })
   } catch (error: any) {

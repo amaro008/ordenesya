@@ -10,57 +10,63 @@ Se te proporcionan TRES órdenes de compra de la MISMA cadena. Analízalas junta
 
 ESTRUCTURA:
 {
-  "nombre_cadena": "nombre de la empresa/cadena que COMPRA y emite la OC — la que aparece en el MEMBRETE o LOGO del documento",
-  "razon_social": "razón social completa del comprador o null",
-  "rfc_emisor": "RFC del comprador/emisor que aparece consistentemente en las 3 OCs o null",
-  "centro": "centro SAP si aparece o null",
-  "almacen": "almacén SAP si aparece o null",
-  "identificadores": [
-    { "tipo": "rfc_emisor", "valor": "RFC exacto del comprador" },
-    { "tipo": "nombre_cadena", "valor": "nombre exacto de la cadena como aparece en el membrete" },
-    { "tipo": "otro", "valor": "dominio de correo del comprador si aparece, ej: platoexpress.com" }
-  ],
-  "comedores": ["lista de comedores/ubicaciones distintas detectados en las 3 OCs"],
-  "formato_skus": "descripción en español del patrón de los códigos de producto. Ej: 'Códigos numéricos con prefijo SIG (SIG8912) o sufijo SIG (8666SIG). También aparecen solo números (66, 307). Algunos tienen sufijo RY (8964RY)'",
-  "ejemplo_skus": ["lista de los 8-10 códigos de producto más representativos encontrados — TAL COMO APARECEN en la columna de claves, incluyendo letras SIG, RY, etc."],
-  "ocs_procesadas": [
-    { "numero_oc": "MPO 367213 o null" },
-    { "numero_oc": "..." },
-    { "numero_oc": "..." }
-  ]
+  "nombre_cadena": "ver regla abajo",
+  "razon_social": "ver regla abajo",
+  "rfc_emisor": "RFC del membrete/logo del documento",
+  "centro": null,
+  "almacen": null,
+  "identificadores": ["ver regla abajo"],
+  "comedores": ["lista de valores del campo COMEDOR en cada OC"],
+  "formato_skus": "descripción del patrón de códigos de producto",
+  "ejemplo_skus": ["códigos tal como aparecen en la columna de claves"],
+  "ocs_procesadas": [{"numero_oc": "..."}]
 }
 
-== REGLA MÁS IMPORTANTE: QUIÉN ES QUIÉN ==
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGLA PRINCIPAL: CÓMO IDENTIFICAR LA CADENA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Estos documentos tienen DOS empresas. Debes identificarlas correctamente:
+En estos documentos hay DOS bloques de texto con nombres de empresas:
 
-EMPRESA A — EL COMPRADOR (quien emite la OC, quien tú debes identificar como cadena):
-- Aparece en el MEMBRETE o LOGO del documento en la parte superior
-- Ejemplos: Arte Di Piatto, Favorite Vegan Food / Kitcheny, Aramark
-- Tiene su propio RFC en el membrete: ADP021022MM0, FVF1607088M2, AME950116SJ1
-- Los correos de los compradores terminan en @platoexpress.com o similar
-- El campo "PROVEEDOR" en el cuerpo del documento dice a quién va dirigida — ESE es el vendedor
+BLOQUE 1 — El MEMBRETE (esquina superior, con logo):
+→ Contiene el nombre de la cadena que COMPRA
+→ Este nombre va en "nombre_cadena"
+→ Ejemplos que has visto: "ARTE DI PIATTO", "FAVORITE VEGAN FOOD", "Kitcheny"
+→ El RFC de este bloque va en "rfc_emisor"
 
-EMPRESA B — EL VENDEDOR/PROVEEDOR (a quien se le envía la OC):
-- Aparece en el campo "PROVEEDOR" del cuerpo del documento
-- Es SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V
-- Su RFC es CNO930113K12
-- NUNCA debe aparecer como nombre_cadena — es el receptor de la OC, no el emisor
+BLOQUE 2 — El campo "PROVEEDOR" (en el cuerpo del documento):
+→ Contiene el nombre del que VENDE: "SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V"
+→ ESTE NOMBRE NUNCA VA EN "nombre_cadena" NI EN "razon_social"
+→ Ignorar completamente para nombre y razón social
 
-== IDENTIFICADORES — incluir TODOS los que aparezcan ==
-Incluye en el array "identificadores" TODOS los siguientes que encuentres:
-- RFC del membrete (tipo: rfc_emisor)
-- Nombre exacto del membrete (tipo: nombre_cadena)
-- Dominio de correo de los compradores (tipo: otro) — ej: "platoexpress.com"
-- Nombre de la plataforma si aparece (tipo: otro)
+VALIDACIÓN: Si "nombre_cadena" contiene "SIGMA" o "FOODSERVICE" → está INCORRECTO, busca el membrete.
 
-== EJEMPLO CORRECTO para OCs de Arte Di Piatto ==
-nombre_cadena: "Arte Di Piatto"  (NO "SIGMA FOODSERVICE")
-rfc_emisor: "ADP021022MM0"       (el RFC del membrete, NO CNO930113K12)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGLA IDENTIFICADORES — EXTRAER MÁXIMO POSIBLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Extrae TODOS los valores que aparezcan en las 3 OCs y que identifiquen al comprador:
+
+1. RFC del membrete → tipo: "rfc_emisor"
+2. Nombre exacto del membrete → tipo: "nombre_cadena"  
+3. Dominio de correo de los compradores (ej: "platoexpress.com") → tipo: "otro"
+4. Nombre de la plataforma/sistema si aparece (ej: "platoexpress", "Plato Express") → tipo: "otro"
+5. Número de solicitud web si hay un prefijo constante → tipo: "otro"
+
+IMPORTANTE: Los correos personales (berenice@..., fatima@...) NO son identificadores de cadena.
+SÍ es identificador el DOMINIO común de esos correos (platoexpress.com).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EJEMPLO CORRECTO para OCs de Arte Di Piatto
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+nombre_cadena: "Arte Di Piatto"
+razon_social: "Arte Di Piatto" (o razón social si aparece explícitamente)
+rfc_emisor: "ADP021022MM0"
 identificadores: [
-  { tipo: "rfc_emisor", valor: "ADP021022MM0" },
-  { tipo: "nombre_cadena", valor: "Arte Di Piatto" },
-  { tipo: "otro", valor: "platoexpress.com" }
+  { "tipo": "rfc_emisor",    "valor": "ADP021022MM0" },
+  { "tipo": "nombre_cadena", "valor": "Arte Di Piatto" },
+  { "tipo": "otro",          "valor": "platoexpress.com" },
+  { "tipo": "otro",          "valor": "Plato Express" }
 ]`
 
 export async function POST(request: NextRequest) {

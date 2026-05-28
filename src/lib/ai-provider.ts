@@ -67,17 +67,16 @@ ESTRUCTURA EXACTA:
   "notas": null
 }
 
-== DOS EMPRESAS EN EL DOCUMENTO — NO LAS CONFUNDAS ==
+== DOS BLOQUES DE EMPRESA EN EL DOCUMENTO ==
 
-COMPRADOR/CADENA (quien emite la OC — VAS A EXTRAER ESTE):
-- Aparece en el MEMBRETE/LOGO: Arte Di Piatto, Favorite Vegan Food, Aramark, Kitcheny
-- Su RFC está en el membrete: ADP021022MM0, FVF1607088M2, AME950116SJ1
-- Los correos terminan en @platoexpress.com o dominio propio
+BLOQUE 1 — MEMBRETE/LOGO (esquina superior izquierda del documento):
+→ Es el COMPRADOR — va en "cadena_detectada"
+→ Ejemplos reales: "Arte Di Piatto" RFC ADP021022MM0, "Favorite Vegan Food" RFC FVF1607088M2, "Aramark" RFC AME950116SJ1
+→ Si el nombre detectado contiene "SIGMA" o "FOODSERVICE" está INCORRECTO — busca el membrete
 
-PROVEEDOR/VENDEDOR (quien RECIBE la OC — IGNORA ESTE):
-- Aparece en el campo "PROVEEDOR": SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V
-- RFC: CNO930113K12 — NUNCA incluir como identificador del comprador
-- Es el receptor de la OC, no el emisor
+BLOQUE 2 — Campo "PROVEEDOR" dentro del cuerpo del documento:
+→ Es el VENDEDOR: SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V (RFC CNO930113K12)  
+→ IGNORAR COMPLETAMENTE — nunca va en cadena_detectada
 
 COMEDOR = campo "COMEDOR" del documento: Borgwarner, Navistar, Vertiv Apodaca, Lab Griffith
 
