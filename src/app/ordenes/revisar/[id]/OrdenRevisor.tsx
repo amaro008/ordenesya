@@ -79,7 +79,7 @@ export default function OrdenRevisor({ id }: { id: string }) {
   }
 
   async function copiarSAP() {
-    const texto = generarClipboardSAP(detalles)
+    const texto = generarClipboardSAP(detalles, orden?.numero_oc || null)
     await navigator.clipboard.writeText(texto)
     await supabase.from('oya_ordenes').update({ estado: 'exportado' }).eq('id', id)
     toast.success(`${calcularResumen(detalles).lineasParaSAP} líneas copiadas al portapapeles`)
