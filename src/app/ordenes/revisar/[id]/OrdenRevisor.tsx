@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient as createBrowserClient } from '@/lib/supabase-browser'
 import { generarClipboardSAP, generarExcelSAP, calcularResumen } from '@/lib/sap-export'
 import toast from 'react-hot-toast'
-import { CheckCircle, AlertTriangle, Copy, Download, Search, Loader2, X, Check, User } from 'lucide-react'
-import type { Orden, DetalleOrden, Cliente, SKU } from '@/types'
+import { CheckCircle, AlertTriangle, Copy, Download, Search, Loader2, X, Check, User, MapPin } from 'lucide-react'
+import type { Orden, DetalleOrden, Cliente, SKU, Ubicacion } from '@/types'
 
 export default function OrdenRevisor({ id }: { id: string }) {
   const router = useRouter()
@@ -14,6 +14,9 @@ export default function OrdenRevisor({ id }: { id: string }) {
   const [detalles, setDetalles] = useState<DetalleOrden[]>([])
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [ubicacion, setUbicacion] = useState<Ubicacion | null>(null)
+  const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+  const [nuevoIdSap, setNuevoIdSap] = useState('')
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [skuSearch, setSkuSearch] = useState<Record<string, string>>({})
@@ -24,11 +27,21 @@ export default function OrdenRevisor({ id }: { id: string }) {
   async function cargarDatos() {
     setLoading(true)
     const [{ data: ordenData }, { data: detallesData }, { data: clientesData }] = await Promise.all([
-      supabase.from('oya_ordenes').select('*, oya_clientes(*)').eq('id', id).single(),
+      supabase.from('oya_ordenes').select('*, oya_clientes(*), oya_ubicaciones(*)').eq('id', id).single(),
       supabase.from('oya_detalles_orden').select('*').eq('orden_id', id).order('linea_num'),
       supabase.from('oya_clientes').select('*').eq('activo', true).order('nombre'),
     ])
-    if (ordenData) { setOrden(ordenData as any); setCliente((ordenData as any).oya_clientes || null) }
+    if (ordenData) {
+      setOrden(ordenData as any)
+      setCliente((ordenData as any).oya_clientes || null)
+      setUbicacion((ordenData as any).oya_ubicaciones || null)
+      // Cargar ubicaciones de la cadena detectada
+      if ((ordenData as any).cliente_id) {
+        const { data: ubs } = await supabase.from('oya_ubicaciones')
+          .select('*').eq('cliente_id', (ordenData as any).cliente_id).eq('activo', true).order('nombre')
+        setUbicaciones((ubs || []) as Ubicacion[])
+      }
+    }
     if (detallesData) setDetalles(detallesData as DetalleOrden[])
     if (clientesData) setClientes(clientesData as Cliente[])
     setLoading(false)
@@ -67,6 +80,40 @@ export default function OrdenRevisor({ id }: { id: string }) {
       await cargarDatos()
       toast.success('SKUs re-validados', { id: 'revalidar' })
     }
+  }
+
+  async function asignarUbicacion(ubicacionId: string) {
+    const u = ubicaciones.find(u => u.id === ubicacionId)
+    setUbicacion(u || null)
+    await supabase.from('oya_ordenes').update({ ubicacion_id: ubicacionId || null }).eq('id', id)
+  }
+
+  async function guardarNuevaUbicacion() {
+    if (!nuevoIdSap.trim() || !orden?.comedor_detectado || !cliente) return
+    // Buscar si ya existe la ubicación sin ID SAP
+    const existente = ubicaciones.find(u => u.nombre.toLowerCase() === orden.comedor_detectado?.toLowerCase())
+    if (existente) {
+      // Actualizar el ID SAP
+      await supabase.from('oya_ubicaciones').update({ id_sap: nuevoIdSap.trim() }).eq('id', existente.id)
+      const updated = { ...existente, id_sap: nuevoIdSap.trim() }
+      setUbicaciones(prev => prev.map(u => u.id === existente.id ? updated : u))
+      setUbicacion(updated)
+      await supabase.from('oya_ordenes').update({ ubicacion_id: existente.id }).eq('id', id)
+    } else {
+      // Crear nueva ubicación
+      const { data } = await supabase.from('oya_ubicaciones').insert({
+        cliente_id: cliente.id,
+        nombre: orden.comedor_detectado!,
+        id_sap: nuevoIdSap.trim(),
+      }).select().single()
+      if (data) {
+        setUbicaciones(prev => [...prev, data as Ubicacion])
+        setUbicacion(data as Ubicacion)
+        await supabase.from('oya_ordenes').update({ ubicacion_id: (data as any).id }).eq('id', id)
+      }
+    }
+    toast.success(`Ubicación "${orden.comedor_detectado}" guardada con ID SAP: ${nuevoIdSap}`)
+    setNuevoIdSap('')
   }
 
   async function confirmarOrden() {
@@ -143,9 +190,10 @@ export default function OrdenRevisor({ id }: { id: string }) {
         ))}
       </div>
 
-      {/* Cadena + Comedor detectado */}
+      {/* Cadena + Ubicación */}
       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: orden?.comedor_detectado ? '12px' : '0' }}>
+        {/* Cadena */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
           <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: cliente ? 'rgba(14,165,233,0.12)' : 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <User size={17} color={cliente ? 'var(--accent)' : 'var(--warning)'} />
           </div>
@@ -157,20 +205,53 @@ export default function OrdenRevisor({ id }: { id: string }) {
             </select>
           </div>
           {cliente && (
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
               <div>Centro: <span style={{ color: 'var(--text-secondary)' }}>{cliente.centro || '—'}</span></div>
               <div>Almacén: <span style={{ color: 'var(--text-secondary)' }}>{cliente.almacen || '—'}</span></div>
             </div>
           )}
         </div>
-        {/* Comedor detectado — informativo */}
-        {(orden as any)?.comedor_detectado && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.15)', borderRadius: '6px', fontSize: '13px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(14,165,233,0.12)', padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
-              COMEDOR
-            </span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>{(orden as any).comedor_detectado}</span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>detectado de la OC · informativo</span>
+
+        {/* Comedor / Ubicación */}
+        {orden?.comedor_detectado && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <MapPin size={14} color="var(--text-muted)" />
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Comedor:</span>
+              <span style={{ fontSize: '13px', fontWeight: '600' }}>{orden.comedor_detectado}</span>
+            </div>
+            {ubicacion ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '6px' }}>
+                  <CheckCircle size={13} color="var(--success)" />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>ID SAP:</span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--success)', fontSize: '15px' }}>
+                    {ubicacion.id_sap || '— sin ID'}
+                  </span>
+                </div>
+                {ubicaciones.length > 1 && (
+                  <select value={ubicacion.id} onChange={e => asignarUbicacion(e.target.value)} style={{ fontSize: '12px', padding: '4px 8px' }}>
+                    {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}{u.id_sap ? ` (${u.id_sap})` : ' — sin ID'}</option>)}
+                  </select>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '7px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--warning)', marginBottom: '8px' }}>
+                  ⚠ Esta ubicación no tiene ID SAP. Captúralo para guardarlo en la cadena.
+                </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input value={nuevoIdSap} onChange={e => setNuevoIdSap(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && guardarNuevaUbicacion()}
+                    placeholder="ID SAP de esta ubicación"
+                    style={{ fontSize: '13px', fontFamily: 'monospace', maxWidth: '200px', padding: '6px 10px', borderColor: 'rgba(245,158,11,0.4)' }} />
+                  <button onClick={guardarNuevaUbicacion} disabled={!nuevoIdSap.trim()}
+                    style={{ padding: '6px 12px', background: nuevoIdSap.trim() ? 'var(--accent)' : 'var(--bg-tertiary)', color: nuevoIdSap.trim() ? 'white' : 'var(--text-muted)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: nuevoIdSap.trim() ? 'pointer' : 'not-allowed' }}>
+                    Guardar en cadena
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -179,7 +260,7 @@ export default function OrdenRevisor({ id }: { id: string }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-primary)' }}>
-              {['#', 'ID Cliente', 'SKU Interno', 'Descripción', 'Cantidad', 'Estado'].map(h => (
+              {['#', 'ID Cliente', 'SKU Interno', 'Descripción', 'Cant. Cliente', 'UM → SAP', 'Estado'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -217,6 +298,24 @@ export default function OrdenRevisor({ id }: { id: string }) {
                   <td style={{ padding: '10px 14px', width: '100px' }}>
                     <input type="number" value={detalle.cantidad} onChange={e => actualizarCantidad(detalle.id, parseFloat(e.target.value) || 0)} step="0.001" min="0" style={{ fontSize: '13px', textAlign: 'right', width: '80px' }} />
                   </td>
+                  <td style={{ padding: '10px 14px', minWidth: '100px' }}>
+                    {detalle.um_cliente || detalle.um_sigma ? (
+                      <div style={{ fontSize: '12px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>{detalle.um_cliente || detalle.unidad_medida || '—'}</span>
+                        {detalle.um_sigma && detalle.um_sigma !== detalle.um_cliente && (
+                          <>
+                            <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>→</span>
+                            <span style={{ color: 'var(--accent)', fontWeight: '600' }}>{detalle.um_sigma}</span>
+                            {detalle.factor_conv && detalle.factor_conv !== 1 && (
+                              <span style={{ color: 'var(--text-muted)', marginLeft: '3px' }}>×{detalle.factor_conv}</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{detalle.unidad_medida || '—'}</span>
+                    )}
+                  </td>
                   <td style={{ padding: '10px 14px' }}>
                     {esConflicto ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--danger)', background: 'rgba(239,68,68,0.1)', padding: '3px 8px', borderRadius: '4px' }}>
@@ -242,55 +341,43 @@ export default function OrdenRevisor({ id }: { id: string }) {
             {resumen.lineasConflicto > 0 && <span>Conflictos: <strong style={{ color: 'var(--danger)' }}>{resumen.lineasConflicto}</strong></span>}
           </div>
 
-          {/* Comparación de totales si la OC los traía */}
-          {(orden?.total_oc || orden?.subtotal_oc) ? (() => {
-            const totalCalculado = detalles
-              .filter(d => d.estado_linea === 'resuelto')
-              .reduce((sum, d) => sum + (d.importe || (d.cantidad * 0)), 0)
-            const totalOC = orden?.total_oc || 0
-            const diferencia = totalOC - totalCalculado
-            const hayPrecios = detalles.some(d => d.importe && d.importe > 0)
-
-            return (
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                {orden?.subtotal_oc ? (
-                  <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Subtotal OC: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                      ${orden.subtotal_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                ) : null}
-                {orden?.iva_oc ? (
-                  <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    IVA: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                      ${orden.iva_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                ) : null}
-                {orden?.total_oc ? (
-                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                    Total OC: <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: '14px' }}>
-                      ${orden.total_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
-                ) : null}
-                {hayPrecios && totalCalculado > 0 ? (
-                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                    Total calculado: <strong style={{ fontFamily: 'monospace', fontSize: '14px', color: Math.abs(diferencia) < 1 ? 'var(--success)' : 'var(--warning)' }}>
-                      ${totalCalculado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </strong>
-                    {Math.abs(diferencia) >= 1 && (
-                      <span style={{ marginLeft: '6px', color: 'var(--warning)', fontSize: '11px' }}>
-                        (dif: ${Math.abs(diferencia).toLocaleString('es-MX', { minimumFractionDigits: 2 })})
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            )
-          })() : null}
+          {/* Comparación de totales */}
+          {(orden?.total_oc || orden?.subtotal_oc) && (
+            <TotalesOC
+              subtotal={orden?.subtotal_oc}
+              iva={orden?.iva_oc}
+              totalOC={orden?.total_oc}
+              detalles={detalles}
+            />
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+
+function TotalesOC({ subtotal, iva, totalOC, detalles }: {
+  subtotal: number | null; iva: number | null; totalOC: number | null; detalles: any[]
+}) {
+  const totalCalculado = detalles
+    .filter(d => d.estado_linea === 'resuelto')
+    .reduce((sum: number, d: any) => sum + (d.importe || 0), 0)
+  const diferencia = (totalOC || 0) - totalCalculado
+  const hayPrecios = detalles.some(d => d.importe && d.importe > 0)
+  const fmt = (n: number) => n.toLocaleString('es-MX', { minimumFractionDigits: 2 })
+
+  return (
+    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: '8px' }}>
+      {subtotal ? <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Subtotal OC: <strong style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>${fmt(subtotal)}</strong></div> : null}
+      {iva ? <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>IVA: <strong style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>${fmt(iva)}</strong></div> : null}
+      {totalOC ? <div style={{ fontSize: '12px' }}>Total OC: <strong style={{ fontFamily: 'monospace', fontSize: '14px', color: 'var(--text-primary)' }}>${fmt(totalOC)}</strong></div> : null}
+      {hayPrecios && totalCalculado > 0 ? (
+        <div style={{ fontSize: '12px' }}>
+          Total calculado: <strong style={{ fontFamily: 'monospace', fontSize: '14px', color: Math.abs(diferencia) < 1 ? 'var(--success)' : 'var(--warning)' }}>${fmt(totalCalculado)}</strong>
+          {Math.abs(diferencia) >= 1 && <span style={{ marginLeft: '6px', color: 'var(--warning)', fontSize: '11px' }}>(dif: ${fmt(Math.abs(diferencia))})</span>}
+        </div>
+      ) : null}
     </div>
   )
 }

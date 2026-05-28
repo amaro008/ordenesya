@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { interpretarOrdenConIA, getMimeType } from '@/lib/ai-provider'
-import { resolverLineasOrden, detectarCliente } from '@/lib/sku-matcher'
+import { resolverLineasOrden, detectarCliente, detectarUbicacion } from '@/lib/sku-matcher'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,8 +9,7 @@ export async function POST(request: NextRequest) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { data: usuario } = await supabase
-      .from('oya_usuarios').select('id').eq('auth_id', session.user.id).single()
+    const { data: usuario } = await supabase.from('oya_usuarios').select('id').eq('auth_id', session.user.id).single()
     if (!usuario) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
     const formData = await request.formData()
@@ -18,34 +17,31 @@ export async function POST(request: NextRequest) {
     if (!archivo) return NextResponse.json({ error: 'No se recibió archivo' }, { status: 400 })
 
     const mimeType = getMimeType(archivo.name)
-    if (!mimeType) return NextResponse.json({ error: 'Formato no soportado. Usa PDF o imagen.' }, { status: 400 })
+    if (!mimeType) return NextResponse.json({ error: 'Formato no soportado' }, { status: 400 })
 
     const arrayBuffer = await archivo.arrayBuffer()
     const base64 = Buffer.from(arrayBuffer).toString('base64')
 
-    // Subir a Storage
     const fileName = `${usuario.id}/${Date.now()}-${archivo.name}`
-    await supabase.storage
-      .from(process.env.SUPABASE_STORAGE_BUCKET || 'ordenesya')
-      .upload(fileName, arrayBuffer, { contentType: mimeType })
+    await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET || 'ordenesya').upload(fileName, arrayBuffer, { contentType: mimeType })
 
-    // Interpretar con IA
     const { resultado: gemini, proveedor } = await interpretarOrdenConIA(base64, mimeType)
-    console.log(`[Orden] Procesada con ${proveedor}, cadena: ${gemini.cadena_detectada?.nombre}, comedor: ${gemini.comedor}`)
+    console.log(`[Orden] ${proveedor} | cadena: ${gemini.cadena_detectada?.nombre} | comedor: ${gemini.comedor}`)
 
-    // Detectar cadena usando identificadores del emisor
     const identificadores = [
       gemini.cadena_detectada?.nombre,
       gemini.cadena_detectada?.rfc,
       ...(gemini.cadena_detectada?.identificadores || []),
     ].filter(Boolean) as string[]
-    const clienteId = await detectarCliente(identificadores)
 
-    // Crear orden con comedor detectado
+    const clienteId = await detectarCliente(identificadores)
+    const ubicacion = await detectarUbicacion(clienteId, gemini.comedor)
+
     const { data: orden, error: ordenError } = await supabase
       .from('oya_ordenes')
       .insert({
         cliente_id: clienteId,
+        ubicacion_id: ubicacion?.id || null,
         asesor_id: usuario.id,
         numero_oc: gemini.numero_oc,
         fecha_oc: gemini.fecha_oc,
@@ -63,21 +59,17 @@ export async function POST(request: NextRequest) {
 
     if (ordenError) throw ordenError
 
-    // Resolver SKUs
     const detalles = await resolverLineasOrden(gemini.lineas, clienteId)
     const lineasResueltas = detalles.filter(d => d.estado_linea === 'resuelto').length
     const lineasConflicto = detalles.filter(d => d.estado_linea === 'conflicto').length
 
-    await supabase.from('oya_detalles_orden').insert(
-      detalles.map(d => ({ ...d, orden_id: orden.id }))
-    )
-    await supabase.from('oya_ordenes')
-      .update({ lineas_resueltas: lineasResueltas, lineas_conflicto: lineasConflicto })
-      .eq('id', orden.id)
+    await supabase.from('oya_detalles_orden').insert(detalles.map(d => ({ ...d, orden_id: orden.id })))
+    await supabase.from('oya_ordenes').update({ lineas_resueltas: lineasResueltas, lineas_conflicto: lineasConflicto }).eq('id', orden.id)
 
     return NextResponse.json({
       ordenId: orden.id,
       cadenaDetectada: clienteId !== null,
+      ubicacionDetectada: ubicacion !== null,
       comedorDetectado: gemini.comedor,
       totalLineas: gemini.lineas.length,
       lineasResueltas,
