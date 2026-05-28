@@ -16,7 +16,7 @@ export async function getProveedorActivo(): Promise<{ provider: 'claude' | 'gemi
 
       const provider = (cfg['ai_provider'] || 'claude') as 'claude' | 'gemini'
       const model = cfg['ai_model'] ||
-        (provider === 'claude' ? 'claude-haiku-4-5' : 'gemini-2.0-flash')
+        (provider === 'claude' ? 'claude-haiku-4-5' : 'gemini-2.5-flash')
       return { provider, model }
     }
   } catch (e) {
@@ -27,7 +27,7 @@ export async function getProveedorActivo(): Promise<{ provider: 'claude' | 'gemi
   const provider = (process.env.AI_PROVIDER || 'claude') as 'claude' | 'gemini'
   const model = provider === 'claude'
     ? process.env.CLAUDE_MODEL || 'claude-haiku-4-5'
-    : process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+    : process.env.GEMINI_MODEL || 'gemini-2.5-flash'
   return { provider, model }
 }
 

@@ -29,7 +29,7 @@ const MODELOS = [
   },
   {
     provider: 'gemini',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     nombre: 'Gemini 2.0 Flash',
     desc: 'Modelo de Google — requiere GEMINI_API_KEY',
     icon: '◈',
@@ -170,7 +170,7 @@ export default function ConfiguracionPanel() {
   }
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '640px' }}>
+    <div className="animate-fade-in">
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Settings size={20} /> Configuración
@@ -180,102 +180,103 @@ export default function ConfiguracionPanel() {
         </p>
       </div>
 
-      {/* ── Modelo de IA ── */}
-      <Section icon={<Brain size={16} />} title="Modelo de IA" subtitle="Selecciona el modelo que usará la app para interpretar las órdenes de compra">
-        {cargandoConfig ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
-            <Loader2 size={14} className="animate-spin" /> Cargando configuración...
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {MODELOS.map(m => {
-              const activo = modeloActivo === m.model
-              return (
-                <button
-                  key={m.model}
-                  onClick={() => !activo && cambiarModelo(m)}
-                  disabled={guardandoModelo}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '14px',
-                    padding: '14px 16px',
-                    background: activo ? `${m.color}12` : 'var(--bg-primary)',
-                    border: `1.5px solid ${activo ? m.color : 'var(--border)'}`,
-                    borderRadius: '9px',
-                    cursor: activo ? 'default' : 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s',
-                    width: '100%',
-                  }}
-                >
-                  <span style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: activo ? m.color : 'var(--text-primary)', marginBottom: '2px' }}>
-                      {m.nombre}
-                    </p>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{m.desc}</p>
-                  </div>
-                  {activo && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '600', color: m.color, background: `${m.color}18`, padding: '4px 10px', borderRadius: '20px', flexShrink: 0 }}>
-                      <CheckCircle size={12} /> Activo
-                    </span>
-                  )}
-                  {guardandoModelo && !activo && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                </button>
-              )
-            })}
-          </div>
-        )}
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>
-          Para usar Gemini agrega <code style={{ background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px' }}>GEMINI_API_KEY</code> en las variables de entorno de Vercel.
-        </p>
-      </Section>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
 
-      {/* ── Catálogo de SKUs ── */}
-      <Section icon={<Package size={16} />} title="Catálogo de productos" subtitle="Carga o actualiza el catálogo de SKUs desde un archivo Excel">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1 }}>
-              {totalSkus.toLocaleString()}
-            </p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>productos en el catálogo</p>
-          </div>
-          {resultadoCarga && (
-            <div style={{ fontSize: '12px', color: 'var(--success)', background: 'rgba(34,197,94,0.1)', padding: '6px 12px', borderRadius: '6px' }}>
-              ✓ {resultadoCarga.insertados.toLocaleString()} cargados
-              {resultadoCarga.errores > 0 && ` · ${resultadoCarga.errores} errores`}
+        {/* ── Columna izquierda: Modelo de IA ── */}
+        <Section icon={<Brain size={16} />} title="Modelo de IA" subtitle="Selecciona el modelo que usará la app para interpretar las órdenes de compra">
+          {cargandoConfig ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
+              <Loader2 size={14} className="animate-spin" /> Cargando configuración...
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {MODELOS.map(m => {
+                const activo = modeloActivo === m.model
+                return (
+                  <button
+                    key={m.model}
+                    onClick={() => !activo && cambiarModelo(m)}
+                    disabled={guardandoModelo}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '14px',
+                      padding: '14px 16px',
+                      background: activo ? `${m.color}12` : 'var(--bg-primary)',
+                      border: `1.5px solid ${activo ? m.color : 'var(--border)'}`,
+                      borderRadius: '9px',
+                      cursor: activo ? 'default' : 'pointer',
+                      textAlign: 'left', transition: 'all 0.15s', width: '100%',
+                    }}
+                  >
+                    <span style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: activo ? m.color : 'var(--text-primary)', marginBottom: '2px' }}>
+                        {m.nombre}
+                      </p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{m.desc}</p>
+                    </div>
+                    {activo && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '600', color: m.color, background: `${m.color}18`, padding: '4px 10px', borderRadius: '20px', flexShrink: 0 }}>
+                        <CheckCircle size={12} /> Activo
+                      </span>
+                    )}
+                    {guardandoModelo && !activo && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                  </button>
+                )
+              })}
             </div>
           )}
-        </div>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>
+            Para usar Gemini agrega <code style={{ background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px' }}>GEMINI_API_KEY</code> en las variables de entorno de Vercel.
+          </p>
+        </Section>
 
-        <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcel} />
+        {/* ── Columna derecha: Catálogo de SKUs ── */}
+        <Section icon={<Package size={16} />} title="Catálogo de productos" subtitle="Carga o actualiza el catálogo de SKUs desde un archivo Excel">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1 }}>
+                {totalSkus.toLocaleString()}
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>productos en el catálogo</p>
+            </div>
+            {resultadoCarga && (
+              <div style={{ fontSize: '12px', color: 'var(--success)', background: 'rgba(34,197,94,0.1)', padding: '6px 12px', borderRadius: '6px' }}>
+                ✓ {resultadoCarga.insertados.toLocaleString()} cargados
+                {resultadoCarga.errores > 0 && ` · ${resultadoCarga.errores} errores`}
+              </div>
+            )}
+          </div>
 
-        <button
-          onClick={() => inputRef.current?.click()}
-          disabled={cargandoSkus}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '9px 16px',
-            background: cargandoSkus ? 'var(--bg-tertiary)' : 'var(--accent)',
-            color: cargandoSkus ? 'var(--text-muted)' : 'white',
-            border: 'none', borderRadius: '7px',
-            fontSize: '13px', fontWeight: '600',
-            cursor: cargandoSkus ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {cargandoSkus ? <><Loader2 size={14} className="animate-spin" /> Cargando...</> : <><Upload size={14} /> Cargar Excel</>}
-        </button>
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcel} />
 
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
-          Columnas requeridas:{' '}
-          {['Sku', 'Material', 'Familia'].map(c => (
-            <code key={c} style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '3px', marginRight: '4px', color: 'var(--accent)' }}>{c}</code>
-          ))}
-          · Familia es opcional · La carga hace upsert (no borra los existentes)
-        </p>
-      </Section>
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={cargandoSkus}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px',
+              background: cargandoSkus ? 'var(--bg-tertiary)' : 'var(--accent)',
+              color: cargandoSkus ? 'var(--text-muted)' : 'white',
+              border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600',
+              cursor: cargandoSkus ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {cargandoSkus ? <><Loader2 size={14} className="animate-spin" /> Cargando...</> : <><Upload size={14} /> Cargar Excel</>}
+          </button>
+
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
+            Columnas requeridas:{' '}
+            {['Sku', 'Material', 'Familia'].map(c => (
+              <code key={c} style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '3px', marginRight: '4px', color: 'var(--accent)' }}>{c}</code>
+            ))}
+            · Familia es opcional · La carga hace upsert
+          </p>
+        </Section>
+
+      </div>
     </div>
   )
 }
+
 
 function Section({ icon, title, subtitle, children }: {
   icon: React.ReactNode; title: string; subtitle?: string; children: React.ReactNode

@@ -206,7 +206,7 @@ export default function ConfigurarCadena() {
     }
 
     toast.success('Cadena configurada correctamente')
-    router.refresh()
+    await fetch('/api/revalidar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '/clientes' }) })
     router.push(`/clientes/detalle/${cliente.id}`)
   }
 
