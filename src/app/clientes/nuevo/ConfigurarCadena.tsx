@@ -343,7 +343,7 @@ export default function ConfigurarCadena() {
       {analisis && (
         <div className="animate-fade-in">
 
-          {/* Header resultado */}
+          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', marginBottom: '20px' }}>
             <Sparkles size={16} color="var(--success)" />
             <p style={{ fontSize: '13px', color: 'var(--success)', fontWeight: '500' }}>
@@ -351,207 +351,214 @@ export default function ConfigurarCadena() {
             </p>
           </div>
 
-          {/* Datos de la cadena */}
-          <Section title="Datos de la cadena">
-            <div style={{ display: 'grid', gap: '14px' }}>
-              <Field label="Nombre de la cadena *" value={nombre} onChange={setNombre} placeholder="Arte Di Piatto, Aramark..." />
-              <Field label="Razón social" value={razonSocial} onChange={setRazonSocial} />
-              <div>
-                <label style={labelStyle}>RFC del emisor</label>
-                <input value={rfcEmisor} onChange={e => setRfcEmisor(e.target.value.toUpperCase())} style={{ fontFamily: 'monospace' }} placeholder="ADP021022MM0" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <Field label="Centro SAP" value={centro} onChange={setCentro} placeholder="1000" />
-                <Field label="Almacén SAP" value={almacen} onChange={setAlmacen} placeholder="0001" />
-              </div>
-            </div>
-          </Section>
+          {/* Grid dos columnas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px,1fr) minmax(380px,1.4fr)', gap: '16px', alignItems: 'start' }}>
 
-          {/* Identificadores */}
-          <Section title="Identificadores de reconocimiento" subtitle="Se usarán para detectar automáticamente las OCs de esta cadena">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
-              {identificadores.map((id, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.2)', borderRadius: '7px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(14,165,233,0.1)', padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {TIPO_LABEL[id.tipo] || id.tipo}
-                  </span>
-                  <input
-                    value={id.valor}
-                    onChange={e => setIdentificadores(prev => prev.map((x, i) => i === idx ? { ...x, valor: e.target.value } : x))}
-                    style={{ flex: 1, fontSize: '13px', padding: '4px 8px' }}
-                  />
-                  <button onClick={() => setIdentificadores(prev => prev.filter((_, i) => i !== idx))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '2px' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-                    <X size={14} />
-                  </button>
+            {/* ── Columna izquierda: datos + identificadores + comedores ── */}
+            <div>
+              <Section title="Datos de la cadena">
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  <Field label="Nombre de la cadena *" value={nombre} onChange={setNombre} placeholder="Arte Di Piatto, Aramark..." />
+                  <Field label="Razón social" value={razonSocial} onChange={setRazonSocial} />
+                  <div>
+                    <label style={labelStyle}>RFC del emisor</label>
+                    <input value={rfcEmisor} onChange={e => setRfcEmisor(e.target.value.toUpperCase())} style={{ fontFamily: 'monospace' }} placeholder="ADP021022MM0" />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <Field label="Centro SAP" value={centro} onChange={setCentro} placeholder="1000" />
+                    <Field label="Almacén SAP" value={almacen} onChange={setAlmacen} placeholder="0001" />
+                  </div>
                 </div>
-              ))}
-            </div>
-            <button onClick={() => setIdentificadores(prev => [...prev, { tipo: 'otro', valor: '' }])}
-              style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              + Agregar identificador manual
-            </button>
-          </Section>
+              </Section>
 
-          {/* Formato de SKUs detectado */}
-          {(analisis.formato_skus || analisis.ejemplo_skus?.length > 0) && (
-            <Section title="Formato de SKUs detectado">
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: analisis.ejemplo_skus?.length ? '12px' : '0' }}>
-                <Info size={14} color="var(--accent)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                  {analisis.formato_skus}
-                </p>
-              </div>
-              {analisis.ejemplo_skus?.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {analisis.ejemplo_skus.slice(0, 10).map((sku, i) => (
-                    <span key={i} style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: '4px', color: 'var(--accent)' }}>
-                      {sku}
-                    </span>
+              <Section title="Identificadores de reconocimiento" subtitle="Se usarán para detectar automáticamente las OCs">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                  {identificadores.map((id, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.2)', borderRadius: '7px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(14,165,233,0.1)', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {TIPO_LABEL[id.tipo] || id.tipo}
+                      </span>
+                      <input value={id.valor} onChange={e => setIdentificadores(prev => prev.map((x, i) => i === idx ? { ...x, valor: e.target.value } : x))}
+                        style={{ flex: 1, fontSize: '13px', padding: '4px 8px' }} />
+                      <button onClick={() => setIdentificadores(prev => prev.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '2px' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+                        <X size={13} />
+                      </button>
+                    </div>
                   ))}
                 </div>
-              )}
-            </Section>
-          )}
+                <button onClick={() => setIdentificadores(prev => [...prev, { tipo: 'otro', valor: '' }])}
+                  style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  + Agregar identificador manual
+                </button>
+              </Section>
 
-          {/* Comedores detectados */}
-          {analisis.comedores?.length > 0 && (
-            <Section title="Comedores detectados" subtitle="Ubicaciones encontradas en las OCs — informativo">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {analisis.comedores.map((c, i) => (
-                  <span key={i} style={{ fontSize: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', padding: '4px 10px', borderRadius: '4px', color: 'var(--text-secondary)' }}>
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {/* Equivalencias de SKUs */}
-          {equivalencias.length > 0 && (
-            <Section
-              title={`SKUs detectados (${equivalencias.length})`}
-              subtitle="Revisa el mapeo de códigos de la OC al catálogo interno"
-            >
-              {/* Resumen */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Resueltos', count: equivalencias.filter(e => e.estado === 'resuelto').length, color: 'var(--success)' },
-                  { label: 'Con sugerencias', count: equivalencias.filter(e => e.estado === 'sugerido').length, color: 'var(--warning)' },
-                  { label: 'Pendientes', count: equivalencias.filter(e => e.estado === 'pendiente').length, color: 'var(--danger)' },
-                ].map(({ label, count, color }) => count > 0 && (
-                  <span key={label} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: `${color}15`, color, fontWeight: '500' }}>
-                    {count} {label}
-                  </span>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
-                {equivalencias.map((eq, idx) => (
-                  <div key={idx} style={{
-                    display: 'grid', gridTemplateColumns: '1fr auto 1fr',
-                    alignItems: 'center', gap: '8px',
-                    padding: '10px 12px',
-                    background: eq.estado === 'resuelto' ? 'rgba(34,197,94,0.05)'
-                              : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.05)'
-                              : 'rgba(239,68,68,0.05)',
-                    border: `1px solid ${eq.estado === 'resuelto' ? 'rgba(34,197,94,0.2)'
-                           : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.2)'
-                           : 'rgba(239,68,68,0.2)'}`,
-                    borderRadius: '7px',
-                  }}>
-                    {/* ID + descripción del cliente */}
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-                        {eq.id_cliente}
-                      </p>
-                      {eq.descripcion_cliente && (
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {eq.descripcion_cliente}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Flecha */}
-                    <span style={{ fontSize: '14px', color: 'var(--text-muted)', flexShrink: 0, padding: '0 4px' }}>→</span>
-
-                    {/* SKU interno con sugerencias */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {eq.estado === 'resuelto' && eq.sku_interno ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '600', color: 'var(--success)' }}>
-                            ✓ {eq.sku_interno}
-                          </span>
-                          <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
-                            i === idx ? { ...x, sku_interno: null, estado: eq.sugerencias.length > 0 ? 'sugerido' : 'pendiente' } : x
-                          ))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '11px' }}>
-                            cambiar
-                          </button>
-                        </div>
-                      ) : eq.sugerencias.length > 0 ? (
-                        <div>
-                          <p style={{ fontSize: '10px', color: 'var(--warning)', marginBottom: '4px', fontWeight: '600' }}>
-                            Elige el SKU correcto:
-                          </p>
-                          {eq.sugerencias.map((s, si) => (
-                            <button key={si} onClick={() => setEquivalencias(prev => prev.map((x, i) =>
-                              i === idx ? { ...x, sku_interno: s.sku, estado: 'resuelto' } : x
-                            ))} style={{
-                              display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
-                              padding: '4px 8px', marginBottom: '3px',
-                              background: 'var(--bg-primary)', border: '1px solid var(--border)',
-                              borderRadius: '5px', cursor: 'pointer', textAlign: 'left',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                            >
-                              <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--accent)', fontSize: '12px', flexShrink: 0 }}>{s.sku}</span>
-                              <span style={{ color: 'var(--text-muted)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.descripcion}</span>
-                            </button>
-                          ))}
-                          <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
-                            i === idx ? { ...x, sugerencias: [], estado: 'pendiente' } : x
-                          ))} style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}>
-                            Ninguna coincide
-                          </button>
-                        </div>
-                      ) : (
-                        <SkuBusquedaInline
-                          onSelect={sku => setEquivalencias(prev => prev.map((x, i) =>
-                            i === idx ? { ...x, sku_interno: sku, estado: 'resuelto' } : x
-                          ))}
-                        />
-                      )}
-                    </div>
+              {(analisis.formato_skus || analisis.ejemplo_skus?.length > 0) && (
+                <Section title="Formato de SKUs">
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: analisis.ejemplo_skus?.length ? '10px' : '0' }}>
+                    <Info size={13} color="var(--accent)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                      {analisis.formato_skus}
+                    </p>
                   </div>
-                ))}
-              </div>
+                  {analisis.ejemplo_skus?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                      {analisis.ejemplo_skus.slice(0, 10).map((sku, i) => (
+                        <span key={i} style={{ fontFamily: 'monospace', fontSize: '11px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: '4px', color: 'var(--accent)' }}>
+                          {sku}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+              )}
 
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>
-                Los pendientes se pueden completar después desde el perfil de la cadena.
-              </p>
-            </Section>
-          )}
+              {analisis.comedores?.length > 0 && (
+                <Section title="Comedores detectados" subtitle="Ubicaciones encontradas en las OCs">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {analisis.comedores.map((c, i) => (
+                      <span key={i} style={{ fontSize: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', padding: '4px 10px', borderRadius: '4px', color: 'var(--text-secondary)' }}>
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </Section>
+              )}
 
-          {/* Guardar */}
-          <button onClick={guardar} disabled={guardando || !nombre.trim()} style={{
-            width: '100%', padding: '12px',
-            background: guardando || !nombre.trim() ? 'var(--bg-tertiary)' : 'var(--accent)',
-            color: guardando || !nombre.trim() ? 'var(--text-muted)' : 'white',
-            border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
-            cursor: guardando || !nombre.trim() ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          }}>
-            <Save size={15} />
-            {guardando ? 'Guardando...' : 'Guardar cadena'}
-          </button>
+              <button onClick={guardar} disabled={guardando || !nombre.trim()} style={{
+                width: '100%', padding: '12px', marginTop: '4px',
+                background: guardando || !nombre.trim() ? 'var(--bg-tertiary)' : 'var(--accent)',
+                color: guardando || !nombre.trim() ? 'var(--text-muted)' : 'white',
+                border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+                cursor: guardando || !nombre.trim() ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              }}>
+                <Save size={15} />
+                {guardando ? 'Guardando...' : 'Guardar cadena'}
+              </button>
+            </div>
+
+            {/* ── Columna derecha: SKUs detectados ── */}
+            <div>
+              {equivalencias.length > 0 ? (
+                <Section
+                  title={`SKUs detectados (${equivalencias.length})`}
+                  subtitle="Revisa el mapeo de códigos de la OC al catálogo interno"
+                >
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    {[
+                      { label: 'Resueltos', count: equivalencias.filter(e => e.estado === 'resuelto').length, color: 'var(--success)' },
+                      { label: 'Con sugerencias', count: equivalencias.filter(e => e.estado === 'sugerido').length, color: 'var(--warning)' },
+                      { label: 'Pendientes', count: equivalencias.filter(e => e.estado === 'pendiente').length, color: 'var(--danger)' },
+                    ].map(({ label, count, color }) => count > 0 && (
+                      <span key={label} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: `${color}15`, color, fontWeight: '500' }}>
+                        {count} {label}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {equivalencias.map((eq, idx) => (
+                      <div key={idx} style={{
+                        padding: '10px 12px',
+                        background: eq.estado === 'resuelto' ? 'rgba(34,197,94,0.05)'
+                                  : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.05)'
+                                  : 'rgba(239,68,68,0.05)',
+                        border: `1px solid ${eq.estado === 'resuelto' ? 'rgba(34,197,94,0.2)'
+                               : eq.estado === 'sugerido' ? 'rgba(245,158,11,0.2)'
+                               : 'rgba(239,68,68,0.2)'}`,
+                        borderRadius: '7px',
+                      }}>
+                        {/* Fila superior: código → SKU resuelto */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: eq.estado !== 'resuelto' ? '8px' : '0' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                              {eq.id_cliente}
+                            </span>
+                            {eq.descripcion_cliente && (
+                              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {eq.descripcion_cliente}
+                              </p>
+                            )}
+                          </div>
+                          <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>→</span>
+                          {eq.estado === 'resuelto' && eq.sku_interno && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                              <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: '700', color: 'var(--success)' }}>
+                                ✓ {eq.sku_interno}
+                              </span>
+                              <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                                i === idx ? { ...x, sku_interno: null, estado: eq.sugerencias.length > 0 ? 'sugerido' : 'pendiente' } : x
+                              ))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '11px' }}>
+                                cambiar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sugerencias o buscador */}
+                        {eq.estado !== 'resuelto' && (
+                          eq.sugerencias.length > 0 ? (
+                            <div>
+                              <p style={{ fontSize: '10px', color: 'var(--warning)', marginBottom: '5px', fontWeight: '600' }}>
+                                Elige el SKU correcto:
+                              </p>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                {eq.sugerencias.map((s, si) => (
+                                  <button key={si} onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                                    i === idx ? { ...x, sku_interno: s.sku, estado: 'resuelto' } : x
+                                  ))} style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                                    padding: '5px 8px', background: 'var(--bg-primary)',
+                                    border: '1px solid var(--border)', borderRadius: '5px',
+                                    cursor: 'pointer', textAlign: 'left',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                                  >
+                                    <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--accent)', fontSize: '12px', flexShrink: 0 }}>{s.sku}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{s.descripcion}</span>
+                                  </button>
+                                ))}
+                                <button onClick={() => setEquivalencias(prev => prev.map((x, i) =>
+                                  i === idx ? { ...x, sugerencias: [], estado: 'pendiente' } : x
+                                ))} style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 0', textAlign: 'left' }}>
+                                  Ninguna coincide →
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <SkuBusquedaInline
+                              onSelect={sku => setEquivalencias(prev => prev.map((x, i) =>
+                                i === idx ? { ...x, sku_interno: sku, estado: 'resuelto' } : x
+                              ))}
+                            />
+                          )
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>
+                    Los pendientes se pueden completar después desde el perfil de la cadena.
+                  </p>
+                </Section>
+              ) : (
+                <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <p style={{ fontSize: '13px' }}>No se detectaron SKUs en las OCs</p>
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
     </div>
   )
 }
+
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
