@@ -40,6 +40,7 @@ export default function NuevaOrdenForm() {
       setProgreso('Validando SKUs...')
       await new Promise(r => setTimeout(r, 400))
       toast.success(`Orden procesada · ${data.lineasResueltas}/${data.totalLineas} líneas resueltas`)
+      router.refresh()
       router.push(`/ordenes/revisar/${data.ordenId}`)
     } catch (error: any) {
       toast.error(error.message || 'Error procesando el documento')

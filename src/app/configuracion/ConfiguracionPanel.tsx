@@ -29,8 +29,8 @@ const MODELOS = [
   },
   {
     provider: 'gemini',
-    model: 'gemini-1.5-pro',
-    nombre: 'Gemini 1.5 Pro',
+    model: 'gemini-2.0-flash',
+    nombre: 'Gemini 2.0 Flash',
     desc: 'Modelo de Google — requiere GEMINI_API_KEY',
     icon: '◈',
     color: '#22c55e',

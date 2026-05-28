@@ -206,6 +206,7 @@ export default function ConfigurarCadena() {
     }
 
     toast.success('Cadena configurada correctamente')
+    router.refresh()
     router.push(`/clientes/detalle/${cliente.id}`)
   }
 
@@ -586,12 +587,32 @@ function SkuBusquedaInline({ onSelect }: { onSelect: (sku: string) => void }) {
     if (query.length < 2) { setResults([]); return }
     try {
       const { createClient } = await import('@/lib/supabase-browser')
+      const { generarQuerysPorDescripcion } = await import('@/lib/search')
       const sb = createClient()
-      const { data } = await sb.from('oya_skus')
+
+      // Búsqueda directa por SKU o código
+      const { data: porSku } = await sb.from('oya_skus')
         .select('sku, descripcion')
-        .or(`sku.ilike.%${query}%,descripcion.ilike.%${query}%`)
-        .eq('activo', true).limit(6)
-      setResults((data || []) as { sku: string; descripcion: string }[])
+        .ilike('sku', `%${query}%`)
+        .eq('activo', true).limit(4)
+
+      // Búsqueda semántica por descripción
+      const queries = generarQuerysPorDescripcion(query)
+      const encontrados = new Map<string, { sku: string; descripcion: string }>()
+      porSku?.forEach(s => encontrados.set(s.sku, s as any))
+
+      for (const q of queries.slice(0, 4)) {
+        if (encontrados.size >= 8) break
+        const { data: porDesc } = await sb.from('oya_skus')
+          .select('sku, descripcion')
+          .ilike('descripcion', `%${q}%`)
+          .eq('activo', true).limit(6)
+        porDesc?.forEach(s => {
+          if (!encontrados.has(s.sku)) encontrados.set(s.sku, s as any)
+        })
+      }
+
+      setResults(Array.from(encontrados.values()).slice(0, 8))
     } catch { setResults([]) }
   }
 

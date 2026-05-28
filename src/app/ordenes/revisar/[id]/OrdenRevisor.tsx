@@ -50,8 +50,22 @@ export default function OrdenRevisor({ id }: { id: string }) {
   async function buscarSKU(detalleId: string, query: string) {
     setSkuSearch(prev => ({ ...prev, [detalleId]: query }))
     if (query.length < 2) { setSkuResults(prev => ({ ...prev, [detalleId]: [] })); return }
-    const { data } = await supabase.from('oya_skus').select('sku, descripcion').or(`sku.ilike.%${query}%,descripcion.ilike.%${query}%`).eq('activo', true).limit(8)
-    setSkuResults(prev => ({ ...prev, [detalleId]: (data as SKU[]) || [] }))
+
+    const { data: porSku } = await supabase.from('oya_skus')
+      .select('sku, descripcion').ilike('sku', `%${query}%`).eq('activo', true).limit(4)
+
+    const { generarQuerysPorDescripcion } = await import('@/lib/search')
+    const queries = generarQuerysPorDescripcion(query)
+    const encontrados = new Map<string, SKU>()
+    porSku?.forEach((s: any) => encontrados.set(s.sku, s))
+
+    for (const q of queries.slice(0, 4)) {
+      if (encontrados.size >= 8) break
+      const { data: porDesc } = await supabase.from('oya_skus')
+        .select('sku, descripcion').ilike('descripcion', `%${q}%`).eq('activo', true).limit(6)
+      porDesc?.forEach((s: any) => { if (!encontrados.has(s.sku)) encontrados.set(s.sku, s) })
+    }
+    setSkuResults(prev => ({ ...prev, [detalleId]: Array.from(encontrados.values()).slice(0, 8) }))
   }
 
   async function asignarSKU(detalle: DetalleOrden, sku: SKU) {

@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       // ── Gemini ───────────────────────────────────────────────
       const { GoogleGenerativeAI } = await import('@google/generative-ai')
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-pro' })
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.0-flash' })
 
       const parts: any[] = archivos.map(a => ({
         inlineData: { mimeType: a.mimeType, data: a.base64 },
@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
 
     // Resolver equivalencias de SKUs contra el catálogo
     const { generarCandidatos } = await import('@/lib/sku-matcher')
+    const { generarQuerysPorDescripcion, normalizar } = await import('@/lib/search')
 
     // Usar skus_detectados (nuevo formato) o ejemplo_skus (fallback)
     const skusRaw: { id: string; desc: string | null }[] = parsed.skus_detectados
@@ -162,26 +163,25 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Sin match — buscar sugerencias por descripción
+        // Sin match — búsqueda semántica por descripción
         let sugerencias: { sku: string; descripcion: string }[] = []
         if (desc) {
-          // Buscar por palabras clave relevantes (ignorar palabras cortas y unidades)
-          const STOP_WORDS = new Set(['DE', 'LA', 'EL', 'EN', 'CON', 'POR', 'FSV', 'KG', 'LT', 'PZA', 'GRS', 'ML'])
-          const palabrasClave = desc.toUpperCase()
-            .split(/[\s\/\-\(\)]+/)
-            .filter(p => p.length > 3 && !STOP_WORDS.has(p))
-            .slice(0, 3)
+          const queries = generarQuerysPorDescripcion(desc)
+          const encontrados = new Map<string, { sku: string; descripcion: string }>()
 
-          for (const palabra of palabrasClave) {
+          for (const q of queries) {
+            if (encontrados.size >= 5) break
             const { data: similares } = await supabase
               .from('oya_skus').select('sku, descripcion')
-              .ilike('descripcion', `%${palabra}%`)
+              .ilike('descripcion', `%${q}%`)
               .eq('activo', true).limit(5)
-            if (similares && similares.length > 0) {
-              sugerencias = (similares as { sku: string; descripcion: string }[])
-              break
-            }
+            similares?.forEach(s => {
+              if (!encontrados.has(s.sku)) {
+                encontrados.set(s.sku, s as { sku: string; descripcion: string })
+              }
+            })
           }
+          sugerencias = Array.from(encontrados.values()).slice(0, 5)
         }
 
         return {

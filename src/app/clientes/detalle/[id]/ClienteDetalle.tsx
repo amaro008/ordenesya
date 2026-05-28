@@ -116,8 +116,24 @@ export default function ClienteDetalle() {
   async function buscarSKU(q: string) {
     setSkuSearch(q)
     if (q.length < 2) { setSkuResults([]); return }
-    const { data } = await supabase.from('oya_skus').select('sku, descripcion').or(`sku.ilike.%${q}%,descripcion.ilike.%${q}%`).eq('activo', true).limit(8)
-    setSkuResults((data || []) as any[])
+
+    // Búsqueda directa por código SKU
+    const { data: porSku } = await supabase.from('oya_skus')
+      .select('sku, descripcion').ilike('sku', `%${q}%`).eq('activo', true).limit(4)
+
+    // Búsqueda semántica por descripción
+    const { generarQuerysPorDescripcion } = await import('@/lib/search')
+    const queries = generarQuerysPorDescripcion(q)
+    const encontrados = new Map<string, any>()
+    porSku?.forEach((s: any) => encontrados.set(s.sku, s))
+
+    for (const query of queries.slice(0, 4)) {
+      if (encontrados.size >= 8) break
+      const { data: porDesc } = await supabase.from('oya_skus')
+        .select('sku, descripcion').ilike('descripcion', `%${query}%`).eq('activo', true).limit(6)
+      porDesc?.forEach((s: any) => { if (!encontrados.has(s.sku)) encontrados.set(s.sku, s) })
+    }
+    setSkuResults(Array.from(encontrados.values()).slice(0, 8))
   }
 
   // Equivalencias
