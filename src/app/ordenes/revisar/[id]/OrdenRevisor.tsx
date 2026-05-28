@@ -220,10 +220,62 @@ export default function OrdenRevisor({ id }: { id: string }) {
             })}
           </tbody>
         </table>
-        <div style={{ padding: '12px 14px', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', fontSize: '13px', color: 'var(--text-secondary)', gap: '24px' }}>
-          <span>Total: <strong style={{ color: 'var(--text-primary)' }}>{resumen.totalLineas}</strong></span>
-          <span>Resueltas: <strong style={{ color: 'var(--success)' }}>{resumen.lineasResueltas}</strong></span>
-          {resumen.lineasConflicto > 0 && <span>Conflictos: <strong style={{ color: 'var(--danger)' }}>{resumen.lineasConflicto}</strong></span>}
+        {/* Footer: líneas + comparación de totales */}
+        <div style={{ padding: '14px 16px', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)' }}>
+          {/* Líneas */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '13px', color: 'var(--text-secondary)', gap: '24px', marginBottom: (orden?.total_oc || orden?.subtotal_oc) ? '12px' : '0' }}>
+            <span>Total líneas: <strong style={{ color: 'var(--text-primary)' }}>{resumen.totalLineas}</strong></span>
+            <span>Resueltas: <strong style={{ color: 'var(--success)' }}>{resumen.lineasResueltas}</strong></span>
+            {resumen.lineasConflicto > 0 && <span>Conflictos: <strong style={{ color: 'var(--danger)' }}>{resumen.lineasConflicto}</strong></span>}
+          </div>
+
+          {/* Comparación de totales si la OC los traía */}
+          {(orden?.total_oc || orden?.subtotal_oc) ? (() => {
+            const totalCalculado = detalles
+              .filter(d => d.estado_linea === 'resuelto')
+              .reduce((sum, d) => sum + (d.importe || (d.cantidad * 0)), 0)
+            const totalOC = orden?.total_oc || 0
+            const diferencia = totalOC - totalCalculado
+            const hayPrecios = detalles.some(d => d.importe && d.importe > 0)
+
+            return (
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                {orden?.subtotal_oc ? (
+                  <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Subtotal OC: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                      ${orden.subtotal_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                ) : null}
+                {orden?.iva_oc ? (
+                  <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    IVA: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                      ${orden.iva_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                ) : null}
+                {orden?.total_oc ? (
+                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                    Total OC: <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: '14px' }}>
+                      ${orden.total_oc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                ) : null}
+                {hayPrecios && totalCalculado > 0 ? (
+                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                    Total calculado: <strong style={{ fontFamily: 'monospace', fontSize: '14px', color: Math.abs(diferencia) < 1 ? 'var(--success)' : 'var(--warning)' }}>
+                      ${totalCalculado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </strong>
+                    {Math.abs(diferencia) >= 1 && (
+                      <span style={{ marginLeft: '6px', color: 'var(--warning)', fontSize: '11px' }}>
+                        (dif: ${Math.abs(diferencia).toLocaleString('es-MX', { minimumFractionDigits: 2 })})
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })() : null}
         </div>
       </div>
     </div>

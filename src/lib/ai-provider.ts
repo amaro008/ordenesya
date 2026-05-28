@@ -1,193 +1,115 @@
-// ============================================================
-// ORDENESYA — Capa de abstracción de IA
-// ============================================================
-// Soporta: Gemini (Google) y Claude (Anthropic)
-//
-//   AI_PROVIDER=gemini   → usa Gemini 1.5 Pro
-//   AI_PROVIDER=claude   → usa Claude Haiku (default)
-//
-// Auto-detección: si no se define AI_PROVIDER, usa la key
-// disponible. Gemini tiene prioridad.
-// ============================================================
-
 import type { GeminiOrdenResponse } from '@/types'
 
-// ============================================================
-// PROMPT COMPARTIDO
-// ============================================================
 const SYSTEM_PROMPT = `Eres un sistema experto en interpretar órdenes de compra (OC) de proveedores de alimentos en México.
-Tu tarea es extraer la información estructurada de documentos de OC y devolver ÚNICAMENTE un JSON válido sin markdown ni explicaciones.
+Devuelve ÚNICAMENTE un JSON válido sin markdown ni explicaciones.
 
-El JSON debe tener exactamente esta estructura:
+Estructura exacta:
 {
   "cliente_detectado": {
-    "nombre": "nombre del cliente COMPRADOR (ver reglas abajo)",
-    "identificadores": ["lista de identificadores únicos: RFC del cliente, nombre de unidad, centro de costos, folio interno, etc."]
+    "nombre": "nombre del comedor/unidad/negocio que EMITE la OC (el comprador)",
+    "identificadores": ["lista de IDs únicos del cliente: RFC, centro de costos, nombre de unidad, ID proveedor"]
   },
-  "numero_oc": "número de orden de compra, o null",
-  "fecha_oc": "fecha de emisión en formato YYYY-MM-DD, o null",
+  "numero_oc": "número de OC (MPO XXXX, FOLIO NKSXXXX, etc.) o null",
+  "fecha_oc": "YYYY-MM-DD o null",
+  "subtotal": 0.0,
+  "iva": 0.0,
+  "total": 0.0,
   "lineas": [
     {
       "linea_num": 1,
-      "id_producto_cliente": "código o ID del producto TAL COMO APARECE en el documento, sin modificar",
-      "descripcion_cliente": "descripción del producto como aparece en el documento, o null",
+      "id_producto_cliente": "código EXACTO del producto tal como aparece en el documento",
+      "descripcion_cliente": "descripción del producto",
       "cantidad": 0.0,
-      "unidad_medida": "unidad: PZA, KG, LT, CJA, PQT, etc., o null"
+      "precio_unitario": 0.0,
+      "importe": 0.0,
+      "unidad_medida": "PZA/KG/LT/CJA/PQT/etc"
     }
   ],
-  "notas": "observaciones relevantes del documento, o null"
+  "notas": null
 }
 
-== REGLA CRÍTICA: IDENTIFICAR AL CLIENTE CORRECTO ==
-El documento tiene DOS empresas: el PROVEEDOR (quien vende) y el CLIENTE (quien compra / emite la OC).
-TU OBJETIVO ES IDENTIFICAR AL CLIENTE, NO AL PROVEEDOR.
+== CLIENTE CORRECTO ==
+- El PROVEEDOR en el documento es quien vende (SIGMA FOODSERVICE, etc.) — NO es el cliente
+- El cliente es quien EMITE/COMPRA: campo COMEDOR, "Nombre de Unidad", membrete del documento
+- Identificadores: centro de costos, RFC del cliente, ID de ubicación — NO el folio de OC
 
-- Campo "COMEDOR": el cliente es ese valor (ej: "Borgwarner", "Vertiv Apodaca", "NAVISTAR")
-- Campo "PROVEEDOR": ese es quien vende — el cliente es quien emite el documento
-- Documentos Aramark: el cliente es el campo "Nombre de Unidad" (ej: "NEMAK SALTILLO")
-- Incluye en identificadores: nombre del comedor, RFC del cliente, nombre de unidad, centro de costos
+== LÍNEAS DE PRODUCTO — MUY IMPORTANTE ==
+- La columna de código de producto se llama: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "Código", "SKU", "Material", "Referencia"
+- Extrae el código TAL COMO APARECE: SIG8912, 8666SIG, 8964RY, SIG7708B, 66, 70060146
+- NO confundas el ID cliente SAP, número de proveedor, ni centro de costos con códigos de producto
+- Los códigos de producto están en la tabla de líneas del pedido, junto a descripción y cantidad
+- Si el código tiene letras como SIG, FSV, RY al inicio o final: inclúyelas tal cual, el sistema las procesará
+- Tabla semanal Aramark: suma cantidades de todos los días
 
-== CANTIDADES ==
-- Números decimales con punto (no coma): 1625.00 no 1,625.00
-- Tabla semanal por días (formato Aramark): suma TODOS los días para el total
-- Cantidad no clara: usa 0
+== TOTALES ==
+- Extrae subtotal, IVA y total del documento si aparecen
+- Usa punto decimal, no coma: 1625.00 no 1,625.00
+- Si no aparece un valor usa 0
 
-== CÓDIGOS DE PRODUCTO ==
-- Extrae el id_producto_cliente EXACTAMENTE como aparece: SIG8912, 8666SIG, 8964RY, 66, 70060146
-- NO modifiques ni normalices el código
-- Columnas típicas: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "SKU"
+Extrae TODAS las líneas de productos sin omitir ninguna.`
 
-== NÚMERO DE OC ==
-- Busca: "MPO XXXXXX", "FOLIO: NKSXXXXXXX", "OC-XXXXX"
-- Excluye: solicitud web, folio RC, número de página
-
-Extrae TODAS las líneas de productos.`
-
-function parseJsonResponse(text: string): GeminiOrdenResponse {
+function parseJson(text: string): GeminiOrdenResponse {
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   try {
     return JSON.parse(clean) as GeminiOrdenResponse
   } catch {
-    console.error('Error parsing AI response:', text)
     throw new Error('La IA devolvió una respuesta que no es JSON válido')
   }
 }
 
-// ============================================================
-// PROVEEDOR: GEMINI
-// ============================================================
-async function interpretarConGemini(
-  archivoBase64: string,
-  mimeType: string
-): Promise<GeminiOrdenResponse> {
+async function interpretarConGemini(base64: string, mimeType: string): Promise<GeminiOrdenResponse> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
-  })
+  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-pro' })
   const result = await model.generateContent([
-    { inlineData: { mimeType, data: archivoBase64 } },
-    { text: `${SYSTEM_PROMPT}\n\nAnaliza este documento y devuelve el JSON:` },
+    { inlineData: { mimeType, data: base64 } },
+    { text: `${SYSTEM_PROMPT}\n\nAnaliza este documento:` },
   ])
-  return parseJsonResponse(result.response.text())
+  return parseJson(result.response.text())
 }
 
-// ============================================================
-// PROVEEDOR: CLAUDE (Anthropic)
-// ============================================================
-async function interpretarConClaude(
-  archivoBase64: string,
-  mimeType: string
-): Promise<GeminiOrdenResponse> {
+async function interpretarConClaude(base64: string, mimeType: string): Promise<GeminiOrdenResponse> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
   const isPdf = mimeType === 'application/pdf'
-
-  // Construir el content block con tipos explícitos para evitar errores de TypeScript
-  type ContentBlock =
-    | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
-    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string } }
-    | { type: 'text'; text: string }
-
-  const mediaBlock: ContentBlock = isPdf
-    ? {
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: archivoBase64,
-        },
-      }
-    : {
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: (mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'),
-          data: archivoBase64,
-        },
-      }
-
-  const textBlock: ContentBlock = {
-    type: 'text',
-    text: 'Analiza este documento de orden de compra y devuelve el JSON estructurado:',
-  }
-
+  type CB = { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+           | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'|'image/png'|'image/webp'|'image/gif'; data: string } }
+           | { type: 'text'; text: string }
+  const mediaBlock: CB = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+    : { type: 'image', source: { type: 'base64', media_type: mimeType as any, data: base64 } }
   const message = await client.messages.create({
     model: process.env.CLAUDE_MODEL || 'claude-haiku-4-5',
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: [mediaBlock, textBlock] as any,
-      },
-    ],
+    messages: [{ role: 'user', content: [mediaBlock, { type: 'text', text: 'Analiza este documento:' }] as any }],
   })
-
-  const textResponse = message.content.find((b) => b.type === 'text')
-  if (!textResponse || textResponse.type !== 'text') {
-    throw new Error('Claude no devolvió respuesta de texto')
-  }
-
-  return parseJsonResponse(textResponse.text)
+  const block = message.content.find(b => b.type === 'text')
+  if (!block || block.type !== 'text') throw new Error('Claude no devolvió texto')
+  return parseJson(block.text)
 }
 
-// ============================================================
-// FUNCIÓN PRINCIPAL
-// ============================================================
 export type AIProvider = 'gemini' | 'claude'
 
 export function getActiveProvider(): AIProvider {
-  const configured = process.env.AI_PROVIDER?.toLowerCase()
-  if (configured === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
-  if (configured === 'claude' && process.env.ANTHROPIC_API_KEY) return 'claude'
+  const cfg = process.env.AI_PROVIDER?.toLowerCase()
+  if (cfg === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
+  if (cfg === 'claude' && process.env.ANTHROPIC_API_KEY) return 'claude'
   if (process.env.GEMINI_API_KEY) return 'gemini'
   if (process.env.ANTHROPIC_API_KEY) return 'claude'
-  throw new Error(
-    'No hay proveedor de IA configurado. Agrega GEMINI_API_KEY o ANTHROPIC_API_KEY.'
-  )
+  throw new Error('No hay proveedor de IA. Agrega GEMINI_API_KEY o ANTHROPIC_API_KEY.')
 }
 
-export async function interpretarOrdenConIA(
-  archivoBase64: string,
-  mimeType: string
-): Promise<{ resultado: GeminiOrdenResponse; proveedor: AIProvider }> {
+export async function interpretarOrdenConIA(base64: string, mimeType: string) {
   const proveedor = getActiveProvider()
-  console.log(`[AI] Usando proveedor: ${proveedor}`)
-  const resultado =
-    proveedor === 'gemini'
-      ? await interpretarConGemini(archivoBase64, mimeType)
-      : await interpretarConClaude(archivoBase64, mimeType)
+  const resultado = proveedor === 'gemini'
+    ? await interpretarConGemini(base64, mimeType)
+    : await interpretarConClaude(base64, mimeType)
   return { resultado, proveedor }
 }
 
-// Compatibilidad con nombre anterior
-export async function interpretarOrdenConGemini(
-  archivoBase64: string,
-  mimeType: string
-): Promise<GeminiOrdenResponse> {
-  const { resultado } = await interpretarOrdenConIA(archivoBase64, mimeType)
+export async function interpretarOrdenConGemini(base64: string, mimeType: string) {
+  const { resultado } = await interpretarOrdenConIA(base64, mimeType)
   return resultado
 }
 
@@ -197,18 +119,13 @@ export const MIME_TYPES_SOPORTADOS: Record<string, string> = {
   'image/jpg': 'image/jpeg',
   'image/png': 'image/png',
   'image/webp': 'image/webp',
-  'image/heic': 'image/heic',
 }
 
 export function getMimeType(filename: string): string | null {
   const ext = filename.split('.').pop()?.toLowerCase()
   const map: Record<string, string> = {
-    pdf: 'application/pdf',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    webp: 'image/webp',
-    heic: 'image/heic',
+    pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    png: 'image/png', webp: 'image/webp',
   }
   return map[ext || ''] || null
 }
