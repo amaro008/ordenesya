@@ -128,7 +128,13 @@ export default function ConfigurarCadena() {
       setIdentificadores(data.identificadores || [])
       setAnalisis(data)
 
-      toast.success('Análisis completado')
+      // Advertir si la IA confundió al proveedor con la cadena
+      const nombreDetectado = (data.nombre_cadena || '').toUpperCase()
+      if (nombreDetectado.includes('SIGMA') || nombreDetectado.includes('FOODSERVICE')) {
+        toast.error('⚠️ La IA detectó a SIGMA FOODSERVICE como cadena — ese es el proveedor, no el cliente. Corrige el nombre de la cadena (ej: Arte Di Piatto)', { duration: 8000 })
+      } else {
+        toast.success('Análisis completado')
+      }
     } catch (err: any) {
       setOcs(prev => prev.map(o => ({ ...o, estado: 'error' })))
       toast.error(err.message || 'Error analizando las OCs')

@@ -10,18 +10,19 @@ Se te proporcionan TRES órdenes de compra de la MISMA cadena. Analízalas junta
 
 ESTRUCTURA:
 {
-  "nombre_cadena": "nombre de la empresa/cadena emisora (membrete del documento)",
-  "razon_social": "razón social completa del emisor o null",
-  "rfc_emisor": "RFC del emisor que aparece consistentemente en las 3 OCs o null",
+  "nombre_cadena": "nombre de la empresa/cadena que COMPRA y emite la OC — la que aparece en el MEMBRETE o LOGO del documento",
+  "razon_social": "razón social completa del comprador o null",
+  "rfc_emisor": "RFC del comprador/emisor que aparece consistentemente en las 3 OCs o null",
   "centro": "centro SAP si aparece o null",
   "almacen": "almacén SAP si aparece o null",
   "identificadores": [
-    { "tipo": "rfc_emisor", "valor": "RFC exacto" },
-    { "tipo": "nombre_cadena", "valor": "nombre exacto como aparece en el membrete" }
+    { "tipo": "rfc_emisor", "valor": "RFC exacto del comprador" },
+    { "tipo": "nombre_cadena", "valor": "nombre exacto de la cadena como aparece en el membrete" },
+    { "tipo": "otro", "valor": "dominio de correo del comprador si aparece, ej: platoexpress.com" }
   ],
   "comedores": ["lista de comedores/ubicaciones distintas detectados en las 3 OCs"],
   "formato_skus": "descripción en español del patrón de los códigos de producto. Ej: 'Códigos numéricos con prefijo SIG (SIG8912) o sufijo SIG (8666SIG). También aparecen solo números (66, 307). Algunos tienen sufijo RY (8964RY)'",
-  "ejemplo_skus": ["lista de los 8-10 códigos de producto más representativos encontrados en las 3 OCs"],
+  "ejemplo_skus": ["lista de los 8-10 códigos de producto más representativos encontrados — TAL COMO APARECEN en la columna de claves, incluyendo letras SIG, RY, etc."],
   "ocs_procesadas": [
     { "numero_oc": "MPO 367213 o null" },
     { "numero_oc": "..." },
@@ -29,13 +30,38 @@ ESTRUCTURA:
   ]
 }
 
-REGLAS CRÍTICAS:
-1. EMISOR/CADENA = quien aparece en el membrete (Arte Di Piatto, Aramark, Favorite Vegan Food, Kitcheny)
-2. PROVEEDOR = SIGMA FOODSERVICE — NO incluir como cadena
-3. COMEDOR = campo COMEDOR del documento (Borgwarner, Navistar, etc.) — van en "comedores"
-4. Para "identificadores": incluye solo los que aparecen en las 3 OCs consistentemente
-5. Para "formato_skus": describe el patrón real que ves, útil para el asesor que va a capturar pedidos
-6. Para "ejemplo_skus": toma los códigos de la columna CLAVE ARTICULO/CLAVE ARTICULOD/Cód. — exactamente como aparecen`
+== REGLA MÁS IMPORTANTE: QUIÉN ES QUIÉN ==
+
+Estos documentos tienen DOS empresas. Debes identificarlas correctamente:
+
+EMPRESA A — EL COMPRADOR (quien emite la OC, quien tú debes identificar como cadena):
+- Aparece en el MEMBRETE o LOGO del documento en la parte superior
+- Ejemplos: Arte Di Piatto, Favorite Vegan Food / Kitcheny, Aramark
+- Tiene su propio RFC en el membrete: ADP021022MM0, FVF1607088M2, AME950116SJ1
+- Los correos de los compradores terminan en @platoexpress.com o similar
+- El campo "PROVEEDOR" en el cuerpo del documento dice a quién va dirigida — ESE es el vendedor
+
+EMPRESA B — EL VENDEDOR/PROVEEDOR (a quien se le envía la OC):
+- Aparece en el campo "PROVEEDOR" del cuerpo del documento
+- Es SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V
+- Su RFC es CNO930113K12
+- NUNCA debe aparecer como nombre_cadena — es el receptor de la OC, no el emisor
+
+== IDENTIFICADORES — incluir TODOS los que aparezcan ==
+Incluye en el array "identificadores" TODOS los siguientes que encuentres:
+- RFC del membrete (tipo: rfc_emisor)
+- Nombre exacto del membrete (tipo: nombre_cadena)
+- Dominio de correo de los compradores (tipo: otro) — ej: "platoexpress.com"
+- Nombre de la plataforma si aparece (tipo: otro)
+
+== EJEMPLO CORRECTO para OCs de Arte Di Piatto ==
+nombre_cadena: "Arte Di Piatto"  (NO "SIGMA FOODSERVICE")
+rfc_emisor: "ADP021022MM0"       (el RFC del membrete, NO CNO930113K12)
+identificadores: [
+  { tipo: "rfc_emisor", valor: "ADP021022MM0" },
+  { tipo: "nombre_cadena", valor: "Arte Di Piatto" },
+  { tipo: "otro", valor: "platoexpress.com" }
+]`
 
 export async function POST(request: NextRequest) {
   try {

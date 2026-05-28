@@ -43,9 +43,11 @@ NIVEL 2 — COMEDOR/UBICACIÓN (la ubicación específica que recibe el pedido):
 - Es UNA ubicación específica de la cadena
 - Va en el campo "comedor"
 
-NIVEL 3 — PROVEEDOR (quien RECIBE la OC, el vendedor):
-- Es SIGMA FOODSERVICE COMERCIAL — NO lo incluyas como cadena ni comedor
-- El campo "PROVEEDOR" del documento es el vendedor, NO el cliente
+NIVEL 3 — PROVEEDOR/VENDEDOR (quien RECIBE la OC):
+- Es SIGMA FOODSERVICE COMERCIAL S DE R.L DE C.V con RFC CNO930113K12
+- Aparece en el campo "PROVEEDOR" del cuerpo del documento
+- NUNCA va en cadena_detectada — es el vendedor, no el comprador
+- Su RFC CNO930113K12 NO debe aparecer como identificador de la cadena
 
 == LÍNEAS DE PRODUCTO ==
 - Columnas: "CLAVE ARTICULO", "CLAVE ARTICULOD", "Cód.", "SKU", "Código"
